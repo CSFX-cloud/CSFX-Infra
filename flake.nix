@@ -15,9 +15,10 @@
     };
   in {
     nixosModules = {
-      csf-agent  = import ./modules/csf-agent.nix;
-      csf-cp     = import ./modules/csf-cp.nix;
-      update-units = import ./modules/update-units.nix;
+      csf-agent        = import ./modules/csf-agent.nix;
+      csf-cp           = import ./modules/csf-cp.nix;
+      csf-binary-cache = import ./modules/csf-binary-cache.nix;
+      update-units     = import ./modules/update-units.nix;
     };
 
     nixosConfigurations = {
@@ -58,6 +59,7 @@
         modules = [
           self.nixosModules.csf-cp
           self.nixosModules.csf-agent
+          self.nixosModules.csf-binary-cache
           self.nixosModules.update-units
           ({ ... }: {
             system.stateVersion = "24.11";
@@ -67,6 +69,7 @@
             services.csf-cp.jwtSecret = "";
             services.csf-agent.enable = true;
             services.csf-agent.gatewayUrl = "http://localhost:8000";
+            services.csf-binary-cache.enable = true;
             services.csf-update-units.enable = true;
             services.csf-update-units.nixCacheUrl = "http://localhost:5000";
             services.csf-update-units.nixCachePublicKey = "";
