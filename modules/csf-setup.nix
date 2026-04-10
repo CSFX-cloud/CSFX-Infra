@@ -53,8 +53,8 @@ in
       enable = true;
       settings = {
         PermitRootLogin = "no";
-        PasswordAuthentication = "no";
-        KbdInteractiveAuthentication = "no";
+        PasswordAuthentication = false;
+        KbdInteractiveAuthentication = false;
       };
     };
 
