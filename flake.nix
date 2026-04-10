@@ -3,10 +3,14 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    pre-commit-hooks.url = "github:cachix/git-hooks.nix";
+    pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs }: let
+  outputs = { self, nixpkgs, pre-commit-hooks }: let
     versions = import ./versions.nix;
+    system = "x86_64-linux";
+    pkgs = nixpkgs.legacyPackages.${system};
 
     mkSystem = { system, modules }: nixpkgs.lib.nixosSystem {
       inherit system;
@@ -14,6 +18,20 @@
       modules = modules;
     };
   in {
+    checks.${system}.pre-commit = pre-commit-hooks.lib.${system}.run {
+      src = ./.;
+      hooks = {
+        nixpkgs-fmt.enable = true;
+        statix.enable = true;
+        deadnix.enable = true;
+      };
+    };
+
+    devShells.${system}.default = pkgs.mkShell {
+      inherit (self.checks.${system}.pre-commit) shellHook;
+      packages = [ pkgs.nixpkgs-fmt pkgs.statix pkgs.deadnix ];
+    };
+
     nixosModules = {
       csf-agent        = import ./modules/csf-agent.nix;
       csf-cp           = import ./modules/csf-cp.nix;
