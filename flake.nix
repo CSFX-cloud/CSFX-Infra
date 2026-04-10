@@ -13,6 +13,22 @@
       specialArgs = { inherit versions; };
       modules = modules;
     };
+
+    baseModules = [
+      self.nixosModules.csf-agent
+      self.nixosModules.update-units
+    ];
+
+    baseConfig = { lib, ... }: {
+      system.stateVersion = "24.11";
+      services.csf-agent.enable = true;
+      services.csf-agent.gatewayUrl = "http://csf-cp:8000";
+      services.csf-update-units.enable = true;
+      services.csf-update-units.nixCacheUrl = "http://csf-cp:5000";
+      services.csf-update-units.nixCachePublicKey = "";
+      services.csf-update-units.nixosConfig = "csf-node";
+      isoImage.isoName = lib.mkForce "csf-node.iso";
+    };
   in {
     nixosModules = {
       csf-agent        = import ./modules/csf-agent.nix;
@@ -22,31 +38,18 @@
     };
 
     nixosConfigurations = {
-      csf-worker = mkSystem {
+      csf-node = mkSystem {
         system = "x86_64-linux";
         modules = [
           "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-          self.nixosModules.csf-agent
-          self.nixosModules.update-units
-          ({ lib, ... }: {
-            system.stateVersion = "24.11";
-            services.csf-agent.enable = true;
-            services.csf-agent.gatewayUrl = "http://csf-cp:8000";
-            services.csf-update-units.enable = true;
-            services.csf-update-units.nixCacheUrl = "http://csf-cp:5000";
-            services.csf-update-units.nixCachePublicKey = "";
-            services.csf-update-units.nixosConfig = "csf-worker";
-            isoImage.isoName = lib.mkForce "csf-worker-amd64.iso";
-          })
-        ];
+        ] ++ baseModules ++ [ baseConfig ];
       };
 
-      csf-worker-arm64 = mkSystem {
+      csf-node-arm64 = mkSystem {
         system = "aarch64-linux";
         modules = [
           "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-          self.nixosModules.csf-agent
-          self.nixosModules.update-units
+        ] ++ baseModules ++ [
           ({ lib, ... }: {
             system.stateVersion = "24.11";
             services.csf-agent.enable = true;
@@ -54,34 +57,30 @@
             services.csf-update-units.enable = true;
             services.csf-update-units.nixCacheUrl = "http://csf-cp:5000";
             services.csf-update-units.nixCachePublicKey = "";
-            services.csf-update-units.nixosConfig = "csf-worker-arm64";
-            isoImage.isoName = lib.mkForce "csf-worker-arm64.iso";
+            services.csf-update-units.nixosConfig = "csf-node-arm64";
+            isoImage.isoName = lib.mkForce "csf-node-arm64.iso";
           })
         ];
       };
 
-      csf-control-plane = mkSystem {
+      csf-node-with-cp = mkSystem {
         system = "x86_64-linux";
-        modules = [
-          "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+        modules = baseModules ++ [
           self.nixosModules.csf-cp
-          self.nixosModules.csf-agent
           self.nixosModules.csf-binary-cache
-          self.nixosModules.update-units
           ({ lib, ... }: {
             system.stateVersion = "24.11";
+            services.csf-agent.enable = true;
+            services.csf-agent.gatewayUrl = "http://localhost:8000";
             services.csf-cp.enable = true;
             services.csf-cp.etcdEndpoints = "http://localhost:2379";
             services.csf-cp.dbUrl = "";
             services.csf-cp.jwtSecret = "";
-            services.csf-agent.enable = true;
-            services.csf-agent.gatewayUrl = "http://localhost:8000";
             services.csf-binary-cache.enable = true;
             services.csf-update-units.enable = true;
             services.csf-update-units.nixCacheUrl = "http://localhost:5000";
             services.csf-update-units.nixCachePublicKey = "";
-            services.csf-update-units.nixosConfig = "csf-control-plane";
-            isoImage.isoName = lib.mkForce "csf-control-plane-amd64.iso";
+            services.csf-update-units.nixosConfig = "csf-node-with-cp";
           })
         ];
       };
