@@ -1,0 +1,98 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: csf
+      POSTGRES_PASSWORD: csf
+      POSTGRES_DB: csf
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    network_mode: host
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U csf"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.12
+    restart: unless-stopped
+    command:
+      - etcd
+      - --data-dir=/data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://localhost:2379
+    volumes:
+      - etcd-data:/data
+    network_mode: host
+
+  csf-api-gateway:
+    image: @image_api_gateway@
+    restart: unless-stopped
+    env_file: /etc/csf/cp.env
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+
+  csf-registry:
+    image: @image_registry@
+    restart: unless-stopped
+    env_file: /etc/csf/cp.env
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+
+  csf-scheduler:
+    image: @image_scheduler@
+    restart: unless-stopped
+    env_file: /etc/csf/cp.env
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+
+  csf-volume-manager:
+    image: @image_volume_manager@
+    restart: unless-stopped
+    env_file: /etc/csf/cp.env
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+
+  csf-failover-controller:
+    image: @image_failover_controller@
+    restart: unless-stopped
+    env_file: /etc/csf/cp.env
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+
+  csf-sdn-controller:
+    image: @image_sdn_controller@
+    restart: unless-stopped
+    env_file: /etc/csf/cp.env
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+
+volumes:
+  pg-data:
+  etcd-data:
