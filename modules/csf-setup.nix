@@ -30,7 +30,6 @@ EOF
     chmod 0600 "$ENV_FILE"
 
     touch "$DONE_FILE"
-    systemctl start csf-cp.service
   '';
 
   logo = ''
@@ -88,8 +87,11 @@ in
 
     systemd.services.csf-cp = {
       description = "CSF Control Plane (Docker Compose)";
+      wantedBy = [ "multi-user.target" ];
       after = [ "docker.service" "csf-setup.service" ];
-      requires = [ "docker.service" "csf-setup.service" ];
+      requires = [ "docker.service" ];
+      wants = [ "csf-setup.service" ];
+      unitConfig.ConditionPathExists = "/var/lib/csf/.setup-complete";
 
       serviceConfig = {
         Type = "oneshot";
