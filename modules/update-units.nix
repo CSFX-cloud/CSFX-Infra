@@ -17,6 +17,17 @@ in
       description = "Public key of the CP Harmonia binary cache";
     };
 
+    infraRepoMirrorDir = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/lib/csf-updater/infra.git";
+      description = "Path to the local git mirror of CSFX-Infra used by csf-updater";
+    };
+
+    nixosConfig = lib.mkOption {
+      type = lib.types.str;
+      description = "Name of the nixosConfiguration to activate (e.g. csf-worker or csf-control-plane)";
+    };
+
     watchdogHeartbeats = lib.mkOption {
       type = lib.types.int;
       default = 3;
@@ -31,9 +42,44 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    nix.settings = {
-      substituters = [ cfg.nixCacheUrl ];
-      trusted-public-keys = [ cfg.nixCachePublicKey ];
+    nix.settings = lib.mkMerge [
+      (lib.mkIf (cfg.nixCacheUrl != "") {
+        substituters = [ cfg.nixCacheUrl ];
+      })
+      (lib.mkIf (cfg.nixCachePublicKey != "") {
+        trusted-public-keys = [ cfg.nixCachePublicKey ];
+      })
+    ];
+
+    systemd.services.csf-os-updater = {
+      description = "CSF OS updater — nixos-rebuild switch on new flake rev";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      onSuccess = [ "csf-watchdog.timer" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+        ExecStart = pkgs.writeShellScript "csf-os-updater" ''
+          set -euo pipefail
+
+          TRIGGER_FILE="/var/lib/csf/update_trigger"
+          MIRROR_DIR="${cfg.infraRepoMirrorDir}"
+          CONFIG="${cfg.nixosConfig}"
+
+          REV=$(cat "$TRIGGER_FILE" | tr -d '[:space:]')
+
+          if ! echo "$REV" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "invalid rev: $REV" >&2
+            exit 1
+          fi
+
+          FLAKE_URL="git+file://${"\${MIRROR_DIR}"}?rev=${"\${REV}"}"
+
+          nixos-rebuild build --flake "$FLAKE_URL#$CONFIG"
+          nixos-rebuild switch --flake "$FLAKE_URL#$CONFIG"
+        '';
+      };
     };
 
     systemd.paths.csf-update-trigger = {
@@ -42,27 +88,6 @@ in
       pathConfig = {
         PathModified = "/var/lib/csf/update_trigger";
         Unit = "csf-os-updater.service";
-      };
-    };
-
-    systemd.services.csf-os-updater = {
-      description = "CSF OS updater — runs nixos-rebuild switch on trigger";
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = pkgs.writeShellScript "csf-os-updater" ''
-          set -euo pipefail
-
-          TRIGGER_FILE="/var/lib/csf/update_trigger"
-          REV=$(cat "$TRIGGER_FILE" | tr -d '[:space:]')
-
-          if ! echo "$REV" | grep -qE '^[0-9a-f]{40}$'; then
-            echo "invalid rev: $REV" >&2
-            exit 1
-          fi
-
-          nixos-rebuild switch --flake "git+http://@csf-cp-internal/infra.git?rev=$REV"
-        '';
-        User = "root";
       };
     };
 
@@ -78,6 +103,7 @@ in
       description = "CSF update watchdog — rollback if heartbeats missing";
       serviceConfig = {
         Type = "oneshot";
+        User = "root";
         ExecStart = pkgs.writeShellScript "csf-watchdog" ''
           set -euo pipefail
 
@@ -95,16 +121,9 @@ in
           if [ "$COUNT" -lt "$REQUIRED" ] 2>/dev/null; then
             echo "only $COUNT/$REQUIRED heartbeats received, triggering rollback" >&2
             nixos-rebuild switch --rollback
-          else
-            echo "watchdog cleared: $COUNT heartbeats confirmed"
           fi
         '';
-        User = "root";
       };
-    };
-
-    systemd.services.csf-os-updater = {
-      onSuccess = [ "csf-watchdog.timer" ];
     };
   };
 }

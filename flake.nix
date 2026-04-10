@@ -35,6 +35,7 @@
             services.csf-update-units.enable = true;
             services.csf-update-units.nixCacheUrl = "http://csf-cp:5000";
             services.csf-update-units.nixCachePublicKey = "";
+            services.csf-update-units.nixosConfig = "csf-worker";
             isoImage.isoName = "csf-worker-amd64.iso";
           })
         ];
@@ -53,6 +54,7 @@
             services.csf-update-units.enable = true;
             services.csf-update-units.nixCacheUrl = "http://csf-cp:5000";
             services.csf-update-units.nixCachePublicKey = "";
+            services.csf-update-units.nixosConfig = "csf-worker-arm64";
             isoImage.isoName = "csf-worker-arm64.iso";
           })
         ];
@@ -78,6 +80,7 @@
             services.csf-update-units.enable = true;
             services.csf-update-units.nixCacheUrl = "http://localhost:5000";
             services.csf-update-units.nixCachePublicKey = "";
+            services.csf-update-units.nixosConfig = "csf-control-plane";
             isoImage.isoName = "csf-control-plane-amd64.iso";
           })
         ];
