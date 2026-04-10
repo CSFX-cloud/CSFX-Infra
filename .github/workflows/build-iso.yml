@@ -10,6 +10,7 @@ on:
       - "flake.nix"
       - "flake.lock"
       - "modules/**"
+      - ".github/workflows/build-iso.yml"
   workflow_dispatch:
 
 permissions:
