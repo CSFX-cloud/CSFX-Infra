@@ -49,6 +49,15 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    services.openssh = {
+      enable = true;
+      settings = {
+        PermitRootLogin = "no";
+        PasswordAuthentication = "no";
+        KbdInteractiveAuthentication = "no";
+      };
+    };
+
     environment.etc."issue".text = ''
       ${logo}
       CSF Node — v${versions.csf.version}
@@ -58,6 +67,7 @@ in
     environment.etc."motd".text = ''
       ${logo}
       CSF Node — v${versions.csf.version}
+      Access this node only via the CSF API or CLI.
 
     '';
 
