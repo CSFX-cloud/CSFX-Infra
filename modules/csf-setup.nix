@@ -103,6 +103,46 @@ in
       };
     };
 
+    systemd.services.csf-cp-ready = {
+      description = "CSF Control Plane readiness check";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "csf-cp.service" ];
+      requires = [ "csf-cp.service" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = "root";
+        ExecStart = pkgs.writeShellScript "csf-cp-ready" ''
+          set -euo pipefail
+
+          CURL=${pkgs.curl}/bin/curl
+          TIMEOUT=120
+          ELAPSED=0
+
+          echo "CSF Control Plane starting..." > /dev/tty1
+
+          while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+            if "$CURL" -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
+              IP=$(hostname -I | awk '{print $1}')
+              echo "" > /dev/tty1
+              echo "CSF Control Plane ready." > /dev/tty1
+              echo "API: http://$IP:8000" > /dev/tty1
+              exit 0
+            fi
+
+            echo "Waiting for API gateway... (''${ELAPSED}s)" > /dev/tty1
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+          done
+
+          echo "CSF Control Plane did not become ready within ''${TIMEOUT}s" > /dev/tty1
+          echo "Check: sudo docker logs csf-csf-api-gateway-1" > /dev/tty1
+          exit 1
+        '';
+      };
+    };
+
     virtualisation.docker.enable = true;
 
     environment.systemPackages = [ pkgs.docker-compose ];
