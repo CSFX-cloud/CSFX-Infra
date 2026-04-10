@@ -23,18 +23,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - config: csf-worker
+          - config: csf-node
             arch: amd64
             runner: ubuntu-latest
-            system: x86_64-linux
-          - config: csf-worker-arm64
+          - config: csf-node-arm64
             arch: arm64
             runner: ubuntu-24.04-arm
-            system: aarch64-linux
-          - config: csf-control-plane
-            arch: amd64
-            runner: ubuntu-latest
-            system: x86_64-linux
 
     steps:
       - uses: actions/checkout@v4
