@@ -28,7 +28,7 @@
           "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           self.nixosModules.csf-agent
           self.nixosModules.update-units
-          ({ ... }: {
+          ({ lib, ... }: {
             system.stateVersion = "24.11";
             services.csf-agent.enable = true;
             services.csf-agent.gatewayUrl = "http://csf-cp:8000";
@@ -36,7 +36,7 @@
             services.csf-update-units.nixCacheUrl = "http://csf-cp:5000";
             services.csf-update-units.nixCachePublicKey = "";
             services.csf-update-units.nixosConfig = "csf-worker";
-            isoImage.isoName = "csf-worker-amd64.iso";
+            isoImage.isoName = lib.mkForce "csf-worker-amd64.iso";
           })
         ];
       };
@@ -47,7 +47,7 @@
           "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           self.nixosModules.csf-agent
           self.nixosModules.update-units
-          ({ ... }: {
+          ({ lib, ... }: {
             system.stateVersion = "24.11";
             services.csf-agent.enable = true;
             services.csf-agent.gatewayUrl = "http://csf-cp:8000";
@@ -55,7 +55,7 @@
             services.csf-update-units.nixCacheUrl = "http://csf-cp:5000";
             services.csf-update-units.nixCachePublicKey = "";
             services.csf-update-units.nixosConfig = "csf-worker-arm64";
-            isoImage.isoName = "csf-worker-arm64.iso";
+            isoImage.isoName = lib.mkForce "csf-worker-arm64.iso";
           })
         ];
       };
@@ -68,7 +68,7 @@
           self.nixosModules.csf-agent
           self.nixosModules.csf-binary-cache
           self.nixosModules.update-units
-          ({ ... }: {
+          ({ lib, ... }: {
             system.stateVersion = "24.11";
             services.csf-cp.enable = true;
             services.csf-cp.etcdEndpoints = "http://localhost:2379";
@@ -81,7 +81,7 @@
             services.csf-update-units.nixCacheUrl = "http://localhost:5000";
             services.csf-update-units.nixCachePublicKey = "";
             services.csf-update-units.nixosConfig = "csf-control-plane";
-            isoImage.isoName = "csf-control-plane-amd64.iso";
+            isoImage.isoName = lib.mkForce "csf-control-plane-amd64.iso";
           })
         ];
       };
