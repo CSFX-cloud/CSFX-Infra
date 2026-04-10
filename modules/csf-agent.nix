@@ -3,10 +3,14 @@
 let
   cfg = config.services.csf-agent;
   arch = if pkgs.stdenv.isAarch64 then "arm64" else "amd64";
-  agentPkg = pkgs.fetchurl {
-    url = versions.csf.agent.${arch}.url;
-    sha256 = versions.csf.agent.${arch}.sha256;
-  };
+  agentBin = pkgs.runCommand "csf-agent" {} ''
+    mkdir -p $out/bin
+    cp ${pkgs.fetchurl {
+      url = versions.csf.agent.${arch}.url;
+      sha256 = versions.csf.agent.${arch}.sha256;
+    }} $out/bin/csf-agent
+    chmod +x $out/bin/csf-agent
+  '';
 in
 {
   options.services.csf-agent = {
@@ -54,7 +58,7 @@ in
       wants = [ "network-online.target" ];
 
       serviceConfig = {
-        ExecStart = "${agentPkg}/bin/csf-agent";
+        ExecStart = "${agentBin}/bin/csf-agent";
         User = "csf-agent";
         Group = "csf-agent";
         Restart = "on-failure";

@@ -25,6 +25,7 @@
       csf-worker = mkSystem {
         system = "x86_64-linux";
         modules = [
+          "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           self.nixosModules.csf-agent
           self.nixosModules.update-units
           ({ ... }: {
@@ -34,6 +35,7 @@
             services.csf-update-units.enable = true;
             services.csf-update-units.nixCacheUrl = "http://csf-cp:5000";
             services.csf-update-units.nixCachePublicKey = "";
+            isoImage.isoName = "csf-worker-amd64.iso";
           })
         ];
       };
@@ -41,6 +43,7 @@
       csf-worker-arm64 = mkSystem {
         system = "aarch64-linux";
         modules = [
+          "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           self.nixosModules.csf-agent
           self.nixosModules.update-units
           ({ ... }: {
@@ -50,6 +53,7 @@
             services.csf-update-units.enable = true;
             services.csf-update-units.nixCacheUrl = "http://csf-cp:5000";
             services.csf-update-units.nixCachePublicKey = "";
+            isoImage.isoName = "csf-worker-arm64.iso";
           })
         ];
       };
@@ -57,6 +61,7 @@
       csf-control-plane = mkSystem {
         system = "x86_64-linux";
         modules = [
+          "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           self.nixosModules.csf-cp
           self.nixosModules.csf-agent
           self.nixosModules.csf-binary-cache
@@ -73,6 +78,7 @@
             services.csf-update-units.enable = true;
             services.csf-update-units.nixCacheUrl = "http://localhost:5000";
             services.csf-update-units.nixCachePublicKey = "";
+            isoImage.isoName = "csf-control-plane-amd64.iso";
           })
         ];
       };
