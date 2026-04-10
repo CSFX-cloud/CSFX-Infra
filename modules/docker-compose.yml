@@ -27,14 +27,24 @@ services:
       - etcd-data:/data
     network_mode: host
 
+  csf-migrate:
+    image: @image_api_gateway@
+    restart: no
+    env_file: /etc/csf/cp.env
+    network_mode: host
+    command: ["/csf-migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   csf-api-gateway:
     image: @image_api_gateway@
     restart: unless-stopped
     env_file: /etc/csf/cp.env
     network_mode: host
     depends_on:
-      postgres:
-        condition: service_healthy
+      csf-migrate:
+        condition: service_completed_successfully
       etcd:
         condition: service_started
 
@@ -44,8 +54,8 @@ services:
     env_file: /etc/csf/cp.env
     network_mode: host
     depends_on:
-      postgres:
-        condition: service_healthy
+      csf-migrate:
+        condition: service_completed_successfully
       etcd:
         condition: service_started
 
@@ -55,8 +65,8 @@ services:
     env_file: /etc/csf/cp.env
     network_mode: host
     depends_on:
-      postgres:
-        condition: service_healthy
+      csf-migrate:
+        condition: service_completed_successfully
       etcd:
         condition: service_started
 
@@ -66,8 +76,8 @@ services:
     env_file: /etc/csf/cp.env
     network_mode: host
     depends_on:
-      postgres:
-        condition: service_healthy
+      csf-migrate:
+        condition: service_completed_successfully
       etcd:
         condition: service_started
 
@@ -77,8 +87,8 @@ services:
     env_file: /etc/csf/cp.env
     network_mode: host
     depends_on:
-      postgres:
-        condition: service_healthy
+      csf-migrate:
+        condition: service_completed_successfully
       etcd:
         condition: service_started
 
@@ -88,8 +98,8 @@ services:
     env_file: /etc/csf/cp.env
     network_mode: host
     depends_on:
-      postgres:
-        condition: service_healthy
+      csf-migrate:
+        condition: service_completed_successfully
       etcd:
         condition: service_started
 
