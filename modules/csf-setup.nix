@@ -113,6 +113,8 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         User = "root";
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
         ExecStart = pkgs.writeShellScript "csf-cp-ready" ''
           set -euo pipefail
 
@@ -120,24 +122,19 @@ in
           TIMEOUT=120
           ELAPSED=0
 
-          echo "CSF Control Plane starting..." > /dev/tty1
-
           while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
             if "$CURL" -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
-              IP=$(hostname -I | awk '{print $1}')
-              echo "" > /dev/tty1
-              echo "CSF Control Plane ready." > /dev/tty1
-              echo "API: http://$IP:8000" > /dev/tty1
+              IP=$(${pkgs.iproute2}/bin/ip route get 1.1.1.1 2>/dev/null | awk '/src/{print $7; exit}' || true)
+              echo "[INFO] csf control plane ready host=$IP port=8000"
               exit 0
             fi
 
-            echo "Waiting for API gateway... (''${ELAPSED}s)" > /dev/tty1
+            echo "[INFO] csf control plane not ready elapsed=''${ELAPSED}s timeout=''${TIMEOUT}s"
             sleep 5
             ELAPSED=$((ELAPSED + 5))
           done
 
-          echo "CSF Control Plane did not become ready within ''${TIMEOUT}s" > /dev/tty1
-          echo "Check: sudo docker logs csf-csf-api-gateway-1" > /dev/tty1
+          echo "[ERROR] csf control plane readiness timeout elapsed=''${TIMEOUT}s"
           exit 1
         '';
       };
