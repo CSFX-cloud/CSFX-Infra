@@ -11,11 +11,11 @@
     };
     agent = {
       amd64 = {
-        url    = "https://github.com/CSFX-cloud/CSF-Core/releases/download/v0.2.2-alpha.449/csfx-agent-amd64";
+        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.449/csfx-agent-amd64";
         sha256 = "4aa852ad894cdb48a621848405d14d72e0e00c0350edef1b02680c67a40cc901";
       };
       arm64 = {
-        url    = "https://github.com/CSFX-cloud/CSF-Core/releases/download/v0.2.2-alpha.449/csfx-agent-arm64";
+        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.449/csfx-agent-arm64";
         sha256 = "1c5d6bf2e50a8415e22a8b96528bcb7a485acfe2731855e70d14dba89fd80016";
       };
     };
