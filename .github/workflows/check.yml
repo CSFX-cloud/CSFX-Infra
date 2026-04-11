@@ -22,8 +22,8 @@ jobs:
       - name: Check flake evaluation
         run: |
           nix flake check --no-build
-          nix eval .#nixosConfigurations.csf-node.config.system.nixos.label
-          nix eval .#nixosConfigurations.csf-node-arm64.config.system.nixos.label
+          nix eval .#nixosConfigurations.csfx-node.config.system.nixos.label
+          nix eval .#nixosConfigurations.csfx-node-arm64.config.system.nixos.label
 
       - name: Run pre-commit hooks
         run: nix develop --command pre-commit run --all-files

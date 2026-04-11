@@ -1,11 +1,11 @@
 { config, lib, pkgs, ... }:
 
 let
-  cfg = config.services.csf-update-units;
+  cfg = config.services.csfx-update-units;
 in
 {
-  options.services.csf-update-units = {
-    enable = lib.mkEnableOption "CSF update path units and watchdog";
+  options.services.csfx-update-units = {
+    enable = lib.mkEnableOption "CSFX update path units and watchdog";
 
     nixCacheUrl = lib.mkOption {
       type = lib.types.str;
@@ -19,13 +19,13 @@ in
 
     infraRepoMirrorDir = lib.mkOption {
       type = lib.types.str;
-      default = "/var/lib/csf-updater/infra.git";
-      description = "Path to the local git mirror of CSFX-Infra used by csf-updater";
+      default = "/var/lib/csfx-updater/infra.git";
+      description = "Path to the local git mirror of CSFX-Infra used by csfx-updater";
     };
 
     nixosConfig = lib.mkOption {
       type = lib.types.str;
-      description = "Name of the nixosConfiguration to activate (e.g. csf-worker or csf-control-plane)";
+      description = "Name of the nixosConfiguration to activate (e.g. csfx-worker or csfx-control-plane)";
     };
 
     watchdogHeartbeats = lib.mkOption {
@@ -51,19 +51,19 @@ in
       })
     ];
 
-    systemd.services.csf-os-updater = {
-      description = "CSF OS updater — nixos-rebuild switch on new flake rev";
+    systemd.services.csfx-os-updater = {
+      description = "CSFX OS updater — nixos-rebuild switch on new flake rev";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
-      onSuccess = [ "csf-watchdog.timer" ];
+      onSuccess = [ "csfx-watchdog.timer" ];
 
       serviceConfig = {
         Type = "oneshot";
         User = "root";
-        ExecStart = pkgs.writeShellScript "csf-os-updater" ''
+        ExecStart = pkgs.writeShellScript "csfx-os-updater" ''
           set -euo pipefail
 
-          TRIGGER_FILE="/var/lib/csf/update_trigger"
+          TRIGGER_FILE="/var/lib/csfx/update_trigger"
           MIRROR_DIR="${cfg.infraRepoMirrorDir}"
           CONFIG="${cfg.nixosConfig}"
 
@@ -82,32 +82,32 @@ in
       };
     };
 
-    systemd.paths.csf-update-trigger = {
-      description = "Watch for CSF update trigger file";
+    systemd.paths.csfx-update-trigger = {
+      description = "Watch for CSFX update trigger file";
       wantedBy = [ "multi-user.target" ];
       pathConfig = {
-        PathModified = "/var/lib/csf/update_trigger";
-        Unit = "csf-os-updater.service";
+        PathModified = "/var/lib/csfx/update_trigger";
+        Unit = "csfx-os-updater.service";
       };
     };
 
-    systemd.timers.csf-watchdog = {
-      description = "CSF update watchdog timer";
+    systemd.timers.csfx-watchdog = {
+      description = "CSFX update watchdog timer";
       timerConfig = {
         OnActiveSec = "${toString cfg.watchdogTimeoutSecs}s";
         RemainAfterElapse = false;
       };
     };
 
-    systemd.services.csf-watchdog = {
-      description = "CSF update watchdog — rollback if heartbeats missing";
+    systemd.services.csfx-watchdog = {
+      description = "CSFX update watchdog — rollback if heartbeats missing";
       serviceConfig = {
         Type = "oneshot";
         User = "root";
-        ExecStart = pkgs.writeShellScript "csf-watchdog" ''
+        ExecStart = pkgs.writeShellScript "csfx-watchdog" ''
           set -euo pipefail
 
-          COUNTER_FILE="/var/lib/csf/post_update_heartbeats"
+          COUNTER_FILE="/var/lib/csfx/post_update_heartbeats"
           REQUIRED=${toString cfg.watchdogHeartbeats}
 
           if [ ! -f "$COUNTER_FILE" ]; then

@@ -1,9 +1,9 @@
 { config, lib, pkgs, versions, ... }:
 
 let
-  v = versions.csf;
+  v = versions.csfx;
   ghcrOrg = "csfx-cloud";
-  imageRef = svc: "ghcr.io/${ghcrOrg}/csf-ce-${svc}@${v.images.${svc}.digest}";
+  imageRef = svc: "ghcr.io/${ghcrOrg}/csfx-ce-${svc}@${v.images.${svc}.digest}";
 
   composeFile = pkgs.substituteAll {
     src = ./docker-compose.yml;
@@ -17,6 +17,6 @@ let
 in
 {
   config = {
-    environment.etc."csf/docker-compose.yml".source = composeFile;
+    environment.etc."csfx/docker-compose.yml".source = composeFile;
   };
 }

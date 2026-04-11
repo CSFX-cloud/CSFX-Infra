@@ -1,14 +1,14 @@
 { config, lib, pkgs, versions, ... }:
 
 let
-  cfg = config.services.csf-cp;
-  v = versions.csf;
+  cfg = config.services.csfx-cp;
+  v = versions.csfx;
   ghcrOrg = "csfx-cloud";
-  imageRef = svc: "ghcr.io/${ghcrOrg}/csf-ce-${svc}@${v.images.${svc}.digest}";
+  imageRef = svc: "ghcr.io/${ghcrOrg}/csfx-ce-${svc}@${v.images.${svc}.digest}";
 in
 {
-  options.services.csf-cp = {
-    enable = lib.mkEnableOption "CSF control plane";
+  options.services.csfx-cp = {
+    enable = lib.mkEnableOption "CSFX control plane";
 
     etcdEndpoints = lib.mkOption {
       type = lib.types.str;
@@ -30,72 +30,72 @@ in
     virtualisation.oci-containers.backend = "docker";
 
     virtualisation.oci-containers.containers = {
-      csf-api-gateway = {
+      csfx-api-gateway = {
         image = imageRef "api-gateway";
         ports = [ "8000:8000" ];
         environment = {
           DATABASE_URL = cfg.dbUrl;
           ETCD_ENDPOINTS = cfg.etcdEndpoints;
           JWT_SECRET = cfg.jwtSecret;
-          SCHEDULER_SERVICE_URL = "http://csf-scheduler:8002";
-          VOLUME_MANAGER_URL = "http://csf-volume-manager:8003";
-          FAILOVER_CONTROLLER_URL = "http://csf-failover-controller:8004";
-          SDN_CONTROLLER_URL = "http://csf-sdn-controller:8005";
-          REGISTRY_SERVICE_URL = "http://csf-registry:8001";
+          SCHEDULER_SERVICE_URL = "http://csfx-scheduler:8002";
+          VOLUME_MANAGER_URL = "http://csfx-volume-manager:8003";
+          FAILOVER_CONTROLLER_URL = "http://csfx-failover-controller:8004";
+          SDN_CONTROLLER_URL = "http://csfx-sdn-controller:8005";
+          REGISTRY_SERVICE_URL = "http://csfx-registry:8001";
         };
-        extraOptions = [ "--network=csf" ];
+        extraOptions = [ "--network=csfx" ];
       };
 
-      csf-registry = {
+      csfx-registry = {
         image = imageRef "registry";
         ports = [ "8001:8001" ];
         environment = {
           DATABASE_URL = cfg.dbUrl;
           ETCD_ENDPOINTS = cfg.etcdEndpoints;
         };
-        extraOptions = [ "--network=csf" ];
+        extraOptions = [ "--network=csfx" ];
       };
 
-      csf-scheduler = {
+      csfx-scheduler = {
         image = imageRef "scheduler";
         ports = [ "8002:8002" ];
         environment = {
           DATABASE_URL = cfg.dbUrl;
           ETCD_ENDPOINTS = cfg.etcdEndpoints;
         };
-        extraOptions = [ "--network=csf" ];
+        extraOptions = [ "--network=csfx" ];
       };
 
-      csf-volume-manager = {
+      csfx-volume-manager = {
         image = imageRef "volume-manager";
         ports = [ "8003:8003" ];
         environment = {
           DATABASE_URL = cfg.dbUrl;
           ETCD_ENDPOINTS = cfg.etcdEndpoints;
         };
-        extraOptions = [ "--network=csf" ];
+        extraOptions = [ "--network=csfx" ];
       };
 
-      csf-failover-controller = {
+      csfx-failover-controller = {
         image = imageRef "failover-controller";
         ports = [ "8004:8004" ];
         environment = {
           DATABASE_URL = cfg.dbUrl;
           ETCD_ENDPOINTS = cfg.etcdEndpoints;
-          SCHEDULER_SERVICE_URL = "http://csf-scheduler:8002";
-          VOLUME_MANAGER_URL = "http://csf-volume-manager:8003";
+          SCHEDULER_SERVICE_URL = "http://csfx-scheduler:8002";
+          VOLUME_MANAGER_URL = "http://csfx-volume-manager:8003";
         };
-        extraOptions = [ "--network=csf" ];
+        extraOptions = [ "--network=csfx" ];
       };
 
-      csf-sdn-controller = {
+      csfx-sdn-controller = {
         image = imageRef "sdn-controller";
         ports = [ "8005:8005" ];
         environment = {
           DATABASE_URL = cfg.dbUrl;
           ETCD_ENDPOINTS = cfg.etcdEndpoints;
         };
-        extraOptions = [ "--network=csf" ];
+        extraOptions = [ "--network=csfx" ];
       };
     };
   };

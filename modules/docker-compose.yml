@@ -3,14 +3,14 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: csf
-      POSTGRES_PASSWORD: csf
-      POSTGRES_DB: csf
+      POSTGRES_USER: csfx
+      POSTGRES_PASSWORD: csfx
+      POSTGRES_DB: csfx
     volumes:
       - pg-data:/var/lib/postgresql/data
     network_mode: host
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U csf"]
+      test: ["CMD-SHELL", "pg_isready -U csfx"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -27,78 +27,78 @@ services:
       - etcd-data:/data
     network_mode: host
 
-  csf-migrate:
+  csfx-migrate:
     image: @image_api_gateway@
     restart: no
-    env_file: /etc/csf/cp.env
+    env_file: /etc/csfx/cp.env
     network_mode: host
-    command: ["/csf-migrate"]
+    command: ["/csfx-migrate"]
     depends_on:
       postgres:
         condition: service_healthy
 
-  csf-api-gateway:
+  csfx-api-gateway:
     image: @image_api_gateway@
     restart: unless-stopped
-    env_file: /etc/csf/cp.env
+    env_file: /etc/csfx/cp.env
     network_mode: host
     depends_on:
-      csf-migrate:
+      csfx-migrate:
         condition: service_completed_successfully
       etcd:
         condition: service_started
 
-  csf-registry:
+  csfx-registry:
     image: @image_registry@
     restart: unless-stopped
-    env_file: /etc/csf/cp.env
+    env_file: /etc/csfx/cp.env
     network_mode: host
     depends_on:
-      csf-migrate:
+      csfx-migrate:
         condition: service_completed_successfully
       etcd:
         condition: service_started
 
-  csf-scheduler:
+  csfx-scheduler:
     image: @image_scheduler@
     restart: unless-stopped
-    env_file: /etc/csf/cp.env
+    env_file: /etc/csfx/cp.env
     network_mode: host
     depends_on:
-      csf-migrate:
+      csfx-migrate:
         condition: service_completed_successfully
       etcd:
         condition: service_started
 
-  csf-volume-manager:
+  csfx-volume-manager:
     image: @image_volume_manager@
     restart: unless-stopped
-    env_file: /etc/csf/cp.env
+    env_file: /etc/csfx/cp.env
     network_mode: host
     depends_on:
-      csf-migrate:
+      csfx-migrate:
         condition: service_completed_successfully
       etcd:
         condition: service_started
 
-  csf-failover-controller:
+  csfx-failover-controller:
     image: @image_failover_controller@
     restart: unless-stopped
-    env_file: /etc/csf/cp.env
+    env_file: /etc/csfx/cp.env
     network_mode: host
     depends_on:
-      csf-migrate:
+      csfx-migrate:
         condition: service_completed_successfully
       etcd:
         condition: service_started
 
-  csf-sdn-controller:
+  csfx-sdn-controller:
     image: @image_sdn_controller@
     restart: unless-stopped
-    env_file: /etc/csf/cp.env
+    env_file: /etc/csfx/cp.env
     network_mode: host
     depends_on:
-      csf-migrate:
+      csfx-migrate:
         condition: service_completed_successfully
       etcd:
         condition: service_started
