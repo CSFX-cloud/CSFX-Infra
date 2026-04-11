@@ -113,8 +113,6 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         User = "root";
-        StandardOutput = "journal+console";
-        StandardError = "journal+console";
         ExecStart = pkgs.writeShellScript "csfx-cp-ready" ''
           set -euo pipefail
 
@@ -124,20 +122,23 @@ in
 
           while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
             if "$CURL" -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
-              IP=$(${pkgs.iproute2}/bin/ip route get 1.1.1.1 2>/dev/null | awk '/src/{print $7; exit}' || true)
-              echo "[INFO] csfx control plane ready host=$IP port=8000"
+              echo "[INFO] control plane ready port=8000"
               exit 0
             fi
-
-            echo "[INFO] csfx control plane not ready elapsed=''${ELAPSED}s timeout=''${TIMEOUT}s"
+            echo "[INFO] control plane not ready elapsed=''${ELAPSED}s timeout=''${TIMEOUT}s"
             sleep 5
             ELAPSED=$((ELAPSED + 5))
           done
 
-          echo "[ERROR] csfx control plane readiness timeout elapsed=''${TIMEOUT}s"
+          echo "[ERROR] control plane readiness timeout elapsed=''${TIMEOUT}s"
           exit 1
         '';
       };
+    };
+
+    systemd.services."getty@tty1" = {
+      after = [ "csfx-cp-ready.service" ];
+      wants = [ "csfx-cp-ready.service" ];
     };
 
     virtualisation.docker.enable = true;
