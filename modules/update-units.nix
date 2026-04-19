@@ -75,9 +75,17 @@ in
           fi
 
           FLAKE_URL="git+file://${"\${MIRROR_DIR}"}?rev=${"\${REV}"}"
+          COMPOSE="${pkgs.docker-compose}/bin/docker-compose"
+          COMPOSE_FILE="/etc/csfx/docker-compose.yml"
 
           nixos-rebuild build --flake "$FLAKE_URL#$CONFIG"
+
+          "$COMPOSE" -f "$COMPOSE_FILE" pull --quiet
+
           nixos-rebuild switch --flake "$FLAKE_URL#$CONFIG"
+
+          "$COMPOSE" -f "$COMPOSE_FILE" up -d --remove-orphans --no-recreate
+          "$COMPOSE" -f "$COMPOSE_FILE" up -d --remove-orphans
         '';
       };
     };
