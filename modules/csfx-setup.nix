@@ -16,8 +16,8 @@ let
     mkdir -p /etc/csfx /var/lib/csfx
 
     JWT_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
-    NODE_NAME=$(hostname -s)
-    NODE_IP=$(${pkgs.iproute2}/bin/ip route get 1 | awk '{print $7; exit}')
+    NODE_NAME=$(${pkgs.nettools}/bin/hostname -s)
+    NODE_IP=$(${pkgs.iproute2}/bin/ip route get 1 | ${pkgs.gawk}/bin/awk '{print $7; exit}')
 
     cat > "$ENV_FILE" <<EOF
 DATABASE_URL=postgres://csfx:csfx@localhost:5000/csfx
