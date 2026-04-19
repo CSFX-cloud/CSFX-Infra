@@ -12,7 +12,7 @@ services:
     network_mode: host
 
   patroni:
-    image: patroni:latest
+    image: @image_patroni@
     restart: unless-stopped
     env_file: /etc/csfx/patroni.env
     volumes:

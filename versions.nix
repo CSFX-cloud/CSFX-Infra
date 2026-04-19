@@ -8,6 +8,7 @@
       volume-manager      = { digest = "sha256:e310a96762d540058d4616c382c358dd86ab1f73f0070faaad012c67c3f8ad0b"; };
       failover-controller = { digest = "sha256:d7916a64b087d4a4cc630666a9d84711183d141293b75dc5e27554ec08785675"; };
       sdn-controller      = { digest = "sha256:1d0f759e049cafb0f530a59496df717dd6269b111e53f09b8c26f83d6a73ac69"; };
+      patroni             = { digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"; };
     };
     agent = {
       amd64 = {
