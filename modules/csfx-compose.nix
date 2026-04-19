@@ -13,7 +13,7 @@ let
     image_volume_manager      = imageRef "volume-manager";
     image_failover_controller = imageRef "failover-controller";
     image_sdn_controller      = imageRef "sdn-controller";
-    image_patroni             = imageRef "patroni";
+    image_patroni             = if v.images ? patroni then imageRef "patroni" else "ghcr.io/${ghcrOrg}/csfx-ce-patroni:latest";
   };
 in
 {
