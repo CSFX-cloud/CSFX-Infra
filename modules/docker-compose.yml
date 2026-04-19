@@ -1,20 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: csfx
-      POSTGRES_PASSWORD: csfx
-      POSTGRES_DB: csfx
-    volumes:
-      - pg-data:/var/lib/postgresql/data
-    network_mode: host
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U csfx"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   etcd:
     image: quay.io/coreos/etcd:v3.5.12
     restart: unless-stopped
@@ -27,6 +11,30 @@ services:
       - etcd-data:/data
     network_mode: host
 
+  patroni:
+    image: patroni:latest
+    restart: unless-stopped
+    env_file: /etc/csfx/patroni.env
+    volumes:
+      - patroni-data:/data
+    network_mode: host
+    depends_on:
+      - etcd
+    healthcheck:
+      test: ["CMD-SHELL", "patronictl -c /etc/patroni/config.yml list | grep -q Leader"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  haproxy:
+    image: haproxy:2.9-alpine
+    restart: unless-stopped
+    volumes:
+      - /etc/csfx/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    network_mode: host
+    depends_on:
+      - patroni
+
   csfx-migrate:
     image: @image_api_gateway@
     restart: no
@@ -34,7 +42,7 @@ services:
     network_mode: host
     command: ["/csfx-migrate"]
     depends_on:
-      postgres:
+      patroni:
         condition: service_healthy
 
   csfx-api-gateway:
@@ -104,5 +112,5 @@ services:
         condition: service_started
 
 volumes:
-  pg-data:
+  patroni-data:
   etcd-data:

@@ -18,5 +18,6 @@ in
 {
   config = {
     environment.etc."csfx/docker-compose.yml".source = composeFile;
+    environment.etc."csfx/haproxy.cfg".source = ./haproxy.cfg;
   };
 }

@@ -16,9 +16,11 @@ let
     mkdir -p /etc/csfx /var/lib/csfx
 
     JWT_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+    NODE_NAME=$(hostname -s)
+    NODE_IP=$(${pkgs.iproute2}/bin/ip route get 1 | awk '{print $7; exit}')
 
     cat > "$ENV_FILE" <<EOF
-DATABASE_URL=postgres://csfx:csfx@localhost/csfx
+DATABASE_URL=postgres://csfx:csfx@localhost:5000/csfx
 JWT_SECRET=$JWT_SECRET
 ETCD_ENDPOINTS=http://localhost:2379
 SCHEDULER_SERVICE_URL=http://localhost:8002
@@ -28,6 +30,26 @@ SDN_CONTROLLER_URL=http://localhost:8005
 REGISTRY_SERVICE_URL=http://localhost:8001
 EOF
     chmod 0600 "$ENV_FILE"
+
+    PATRONI_ENV_FILE="/etc/csfx/patroni.env"
+    cat > "$PATRONI_ENV_FILE" <<EOF
+PATRONI_NAME=$NODE_NAME
+PATRONI_SCOPE=csfx
+PATRONI_POSTGRESQL_LISTEN=0.0.0.0:5432
+PATRONI_POSTGRESQL_CONNECT_ADDRESS=$NODE_IP:5432
+PATRONI_RESTAPI_LISTEN=0.0.0.0:8008
+PATRONI_RESTAPI_CONNECT_ADDRESS=$NODE_IP:8008
+PATRONI_ETCD3_HOSTS=$NODE_IP:2379
+PATRONI_SUPERUSER_USERNAME=postgres
+PATRONI_SUPERUSER_PASSWORD=postgres
+PATRONI_REPLICATION_USERNAME=replicator
+PATRONI_REPLICATION_PASSWORD=replicator
+PATRONI_admin_USERNAME=csfx
+PATRONI_admin_PASSWORD=csfx
+PATRONI_admin_OPTIONS=createdb,login
+PGDATA=/data/pgdata
+EOF
+    chmod 0600 "$PATRONI_ENV_FILE"
 
     touch "$DONE_FILE"
   '';
