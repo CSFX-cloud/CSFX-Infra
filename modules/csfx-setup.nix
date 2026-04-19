@@ -20,7 +20,7 @@ let
     NODE_IP=$(${pkgs.iproute2}/bin/ip route get 1 | ${pkgs.gawk}/bin/awk '{print $7; exit}')
 
     cat > "$ENV_FILE" <<EOF
-DATABASE_URL=postgres://csfx:csfx@localhost:5000/csfx
+DATABASE_URL=postgres://csfx:csfx@localhost:5432/csfx
 JWT_SECRET=$JWT_SECRET
 ETCD_ENDPOINTS=http://localhost:2379
 SCHEDULER_SERVICE_URL=http://localhost:8002

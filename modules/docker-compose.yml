@@ -21,19 +21,10 @@ services:
     depends_on:
       - etcd
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8008/primary || curl -sf http://localhost:8008/replica"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8008/health"]
       interval: 10s
       timeout: 5s
       retries: 18
-
-  haproxy:
-    image: haproxy:2.9-alpine
-    restart: unless-stopped
-    volumes:
-      - /etc/csfx/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
-    network_mode: host
-    depends_on:
-      - patroni
 
   csfx-migrate:
     image: @image_api_gateway@
