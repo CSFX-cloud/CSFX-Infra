@@ -119,7 +119,7 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         EnvironmentFile = "/etc/csfx/cp.env";
-        ExecStart = "${pkgs.docker-compose}/bin/docker-compose -f /etc/csfx/docker-compose.yml up -d";
+        ExecStart = "${pkgs.docker-compose}/bin/docker-compose -f /etc/csfx/docker-compose.yml up -d --remove-orphans";
         ExecStop = "${pkgs.docker-compose}/bin/docker-compose -f /etc/csfx/docker-compose.yml down";
         User = "root";
       };
