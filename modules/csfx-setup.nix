@@ -69,13 +69,15 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    services.openssh = {
+    services.openssh.enable = lib.mkForce false;
+
+    networking.firewall = {
       enable = true;
-      settings = {
-        PermitRootLogin = lib.mkForce "no";
-        PasswordAuthentication = false;
-        KbdInteractiveAuthentication = false;
-      };
+      allowedTCPPorts = [ 8000 ];
+      extraInputRules = ''
+        ip saddr 127.0.0.1/8 tcp dport { 8001, 8002, 8003, 8004, 8005 } accept
+        ip6 saddr ::1/128 tcp dport { 8001, 8002, 8003, 8004, 8005 } accept
+      '';
     };
 
     environment.etc."issue".text = ''
