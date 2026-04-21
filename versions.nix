@@ -1,22 +1,22 @@
 {
   csfx = {
-    version = "0.2.2-alpha.455";
+    version = "0.2.2-alpha.456";
     images = {
-      api-gateway         = { digest = "sha256:73efe757bfcc0be15ca14c07dab06c977b1b0ecef5ba37a3a741a5f5f837e2d5"; };
-      registry            = { digest = "sha256:955665c9999adf206d04217c12ff8488a9aa41eb41f061f6a5ce2c91c877a65f"; };
-      scheduler           = { digest = "sha256:93fcf3581299c51bd4c8a2cc8da7f8dc153ba9b2b48041fc3f5370b49a3cbf54"; };
-      volume-manager      = { digest = "sha256:cb6f2bf72b3ba970b7bd2540211163e4251d58c5952619fb47d8f46b3aec00c5"; };
-      failover-controller = { digest = "sha256:38c099fc2ed725a2e03892e566d0a02c390ad4009fed91f3e10cb24b7f42ecca"; };
-      sdn-controller      = { digest = "sha256:72a6becf85388dc99f95e2c515475150671f4c01b0df5649684bc20ea0c286bc"; };
+      api-gateway         = { digest = "sha256:c2003d3c5196bcc029c61e1c01a3d7eab97db4c1198b495ae98127b249c61402"; };
+      registry            = { digest = "sha256:868f25e73faab0831312682170bdf2b930ba7e818d7dbfdf9aa7139b4fcb6284"; };
+      scheduler           = { digest = "sha256:ab012c0121e750623b77bd7f2c2794a5ce6e0566836f3e39580cda2d0f62d9bb"; };
+      volume-manager      = { digest = "sha256:4664e67183a6c9898c52701e8db41e8477642a075ae259004464e9823039239c"; };
+      failover-controller = { digest = "sha256:4e58c64337d91d0122bf8a777b9128f6d922c081d5c908473d52c275b8f31ed3"; };
+      sdn-controller      = { digest = "sha256:9552d26b7baa99fa4b03e6e49ae9b0312d49696cd46d68f91f0092409b528660"; };
     };
     agent = {
       amd64 = {
-        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.455/csfx-agent-amd64";
-        sha256 = "6b362e31bc58110819a31d9116a15f848e23b0d15404c63aefc7bf4e726acb1a";
+        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.456/csfx-agent-amd64";
+        sha256 = "57096ff869be00c92516220a8ec5b977cc7024bc19210460b3c2291ec9bd4e38";
       };
       arm64 = {
-        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.455/csfx-agent-arm64";
-        sha256 = "9a282040b829eea8c0c52652238b3a405b77945ff3090480af8030008b386509";
+        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.456/csfx-agent-arm64";
+        sha256 = "51b0fc3efdad3c5bcfdb478674d716dd9bf1157d13ebbd2ac7a9811c416a04e6";
       };
     };
   };
