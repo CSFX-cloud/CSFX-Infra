@@ -47,6 +47,7 @@ services:
       - "8000:8000"
     networks:
       - csfx-internal
+      - csfx-external
     depends_on:
       csfx-migrate:
         condition: service_completed_successfully
@@ -117,6 +118,8 @@ networks:
   csfx-internal:
     driver: bridge
     internal: true
+  csfx-external:
+    driver: bridge
 
 volumes:
   patroni-data:
