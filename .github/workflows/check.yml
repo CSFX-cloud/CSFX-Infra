@@ -1,0 +1,29 @@
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  nix-check:
+    name: Nix flake check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Check flake evaluation
+        run: |
+          nix flake check --no-build
+          nix eval .#nixosConfigurations.csfx-node.config.system.nixos.label
+          nix eval .#nixosConfigurations.csfx-node-arm64.config.system.nixos.label
+
+      - name: Run pre-commit hooks
+        run: nix develop --command pre-commit run --all-files

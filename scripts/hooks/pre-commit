@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+if ! command -v nix > /dev/null 2>&1; then
+  exit 0
+fi
+
+echo "nix: checking flake evaluation..."
+nix flake check --no-build 2>&1 || {
+  echo "nix flake check failed — commit aborted"
+  exit 1
+}
+echo "nix: ok"

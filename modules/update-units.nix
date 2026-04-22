@@ -1,11 +1,11 @@
 { config, lib, pkgs, ... }:
 
 let
-  cfg = config.services.csf-update-units;
+  cfg = config.services.csfx-update-units;
 in
 {
-  options.services.csf-update-units = {
-    enable = lib.mkEnableOption "CSF update path units and watchdog";
+  options.services.csfx-update-units = {
+    enable = lib.mkEnableOption "CSFX update path units and watchdog";
 
     nixCacheUrl = lib.mkOption {
       type = lib.types.str;
@@ -15,6 +15,17 @@ in
     nixCachePublicKey = lib.mkOption {
       type = lib.types.str;
       description = "Public key of the CP Harmonia binary cache";
+    };
+
+    infraRepoMirrorDir = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/lib/csfx-updater/infra.git";
+      description = "Path to the local git mirror of CSFX-Infra used by csfx-updater";
+    };
+
+    nixosConfig = lib.mkOption {
+      type = lib.types.str;
+      description = "Name of the nixosConfiguration to activate (e.g. csfx-worker or csfx-control-plane)";
     };
 
     watchdogHeartbeats = lib.mkOption {
@@ -31,28 +42,31 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    nix.settings = {
-      substituters = [ cfg.nixCacheUrl ];
-      trusted-public-keys = [ cfg.nixCachePublicKey ];
-    };
+    nix.settings = lib.mkMerge [
+      (lib.mkIf (cfg.nixCacheUrl != "") {
+        substituters = [ cfg.nixCacheUrl ];
+      })
+      (lib.mkIf (cfg.nixCachePublicKey != "") {
+        trusted-public-keys = [ cfg.nixCachePublicKey ];
+      })
+    ];
 
-    systemd.paths.csf-update-trigger = {
-      description = "Watch for CSF update trigger file";
-      wantedBy = [ "multi-user.target" ];
-      pathConfig = {
-        PathModified = "/var/lib/csf/update_trigger";
-        Unit = "csf-os-updater.service";
-      };
-    };
+    systemd.services.csfx-os-updater = {
+      description = "CSFX OS updater — nixos-rebuild switch on new flake rev";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      onSuccess = [ "csfx-watchdog.timer" ];
 
-    systemd.services.csf-os-updater = {
-      description = "CSF OS updater — runs nixos-rebuild switch on trigger";
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = pkgs.writeShellScript "csf-os-updater" ''
+        User = "root";
+        ExecStart = pkgs.writeShellScript "csfx-os-updater" ''
           set -euo pipefail
 
-          TRIGGER_FILE="/var/lib/csf/update_trigger"
+          TRIGGER_FILE="/var/lib/csfx/update_trigger"
+          MIRROR_DIR="${cfg.infraRepoMirrorDir}"
+          CONFIG="${cfg.nixosConfig}"
+
           REV=$(cat "$TRIGGER_FILE" | tr -d '[:space:]')
 
           if ! echo "$REV" | grep -qE '^[0-9a-f]{40}$'; then
@@ -60,28 +74,48 @@ in
             exit 1
           fi
 
-          nixos-rebuild switch --flake "git+http://@csf-cp-internal/infra.git?rev=$REV"
+          FLAKE_URL="git+file://${"\${MIRROR_DIR}"}?rev=${"\${REV}"}"
+          COMPOSE="${pkgs.docker-compose}/bin/docker-compose"
+          COMPOSE_FILE="/etc/csfx/docker-compose.yml"
+
+          nixos-rebuild build --flake "$FLAKE_URL#$CONFIG"
+
+          "$COMPOSE" -f "$COMPOSE_FILE" pull --quiet
+
+          nixos-rebuild switch --flake "$FLAKE_URL#$CONFIG"
+
+          "$COMPOSE" -f "$COMPOSE_FILE" up -d --remove-orphans --no-recreate
+          "$COMPOSE" -f "$COMPOSE_FILE" up -d --remove-orphans
         '';
-        User = "root";
       };
     };
 
-    systemd.timers.csf-watchdog = {
-      description = "CSF update watchdog timer";
+    systemd.paths.csfx-update-trigger = {
+      description = "Watch for CSFX update trigger file";
+      wantedBy = [ "multi-user.target" ];
+      pathConfig = {
+        PathModified = "/var/lib/csfx/update_trigger";
+        Unit = "csfx-os-updater.service";
+      };
+    };
+
+    systemd.timers.csfx-watchdog = {
+      description = "CSFX update watchdog timer";
       timerConfig = {
         OnActiveSec = "${toString cfg.watchdogTimeoutSecs}s";
         RemainAfterElapse = false;
       };
     };
 
-    systemd.services.csf-watchdog = {
-      description = "CSF update watchdog — rollback if heartbeats missing";
+    systemd.services.csfx-watchdog = {
+      description = "CSFX update watchdog — rollback if heartbeats missing";
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = pkgs.writeShellScript "csf-watchdog" ''
+        User = "root";
+        ExecStart = pkgs.writeShellScript "csfx-watchdog" ''
           set -euo pipefail
 
-          COUNTER_FILE="/var/lib/csf/post_update_heartbeats"
+          COUNTER_FILE="/var/lib/csfx/post_update_heartbeats"
           REQUIRED=${toString cfg.watchdogHeartbeats}
 
           if [ ! -f "$COUNTER_FILE" ]; then
@@ -95,16 +129,9 @@ in
           if [ "$COUNT" -lt "$REQUIRED" ] 2>/dev/null; then
             echo "only $COUNT/$REQUIRED heartbeats received, triggering rollback" >&2
             nixos-rebuild switch --rollback
-          else
-            echo "watchdog cleared: $COUNT heartbeats confirmed"
           fi
         '';
-        User = "root";
       };
-    };
-
-    systemd.services.csf-os-updater = {
-      onSuccess = [ "csf-watchdog.timer" ];
     };
   };
 }

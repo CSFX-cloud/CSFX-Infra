@@ -1,0 +1,126 @@
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.12
+    restart: unless-stopped
+    command:
+      - etcd
+      - --data-dir=/data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+    volumes:
+      - etcd-data:/data
+    networks:
+      - csfx-internal
+
+  patroni:
+    image: @image_patroni@
+    restart: unless-stopped
+    env_file: /etc/csfx/patroni.env
+    volumes:
+      - patroni-data:/data
+    networks:
+      - csfx-internal
+    depends_on:
+      - etcd
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8008/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+
+  csfx-migrate:
+    image: @image_api_gateway@
+    restart: no
+    env_file: /etc/csfx/cp.env
+    networks:
+      - csfx-internal
+    command: ["/csfx-migrate"]
+    depends_on:
+      patroni:
+        condition: service_healthy
+
+  csfx-api-gateway:
+    image: @image_api_gateway@
+    restart: unless-stopped
+    env_file: /etc/csfx/cp.env
+    ports:
+      - "8000:8000"
+    networks:
+      - csfx-internal
+      - csfx-external
+    depends_on:
+      csfx-migrate:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_started
+
+  csfx-registry:
+    image: @image_registry@
+    restart: unless-stopped
+    env_file: /etc/csfx/cp.env
+    networks:
+      - csfx-internal
+    depends_on:
+      csfx-migrate:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_started
+
+  csfx-scheduler:
+    image: @image_scheduler@
+    restart: unless-stopped
+    env_file: /etc/csfx/cp.env
+    networks:
+      - csfx-internal
+    depends_on:
+      csfx-migrate:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_started
+
+  csfx-volume-manager:
+    image: @image_volume_manager@
+    restart: unless-stopped
+    env_file: /etc/csfx/cp.env
+    networks:
+      - csfx-internal
+    depends_on:
+      csfx-migrate:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_started
+
+  csfx-failover-controller:
+    image: @image_failover_controller@
+    restart: unless-stopped
+    env_file: /etc/csfx/cp.env
+    networks:
+      - csfx-internal
+    depends_on:
+      csfx-migrate:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_started
+
+  csfx-sdn-controller:
+    image: @image_sdn_controller@
+    restart: unless-stopped
+    env_file: /etc/csfx/cp.env
+    networks:
+      - csfx-internal
+    depends_on:
+      csfx-migrate:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_started
+
+networks:
+  csfx-internal:
+    driver: bridge
+    internal: true
+  csfx-external:
+    driver: bridge
+
+volumes:
+  patroni-data:
+  etcd-data:
