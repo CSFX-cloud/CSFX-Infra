@@ -21,14 +21,14 @@ let
     NODE_IP=$(${pkgs.iproute2}/bin/ip route get 1 | ${pkgs.gawk}/bin/awk '{print $7; exit}')
 
     cat > "$ENV_FILE" <<EOF
-DATABASE_URL=postgres://csfx:$DB_PASSWORD@localhost:5432/csfx
+DATABASE_URL=postgres://csfx:$DB_PASSWORD@patroni:5432/csfx
 JWT_SECRET=$JWT_SECRET
-ETCD_ENDPOINTS=http://localhost:2379
-SCHEDULER_SERVICE_URL=http://localhost:8002
-VOLUME_MANAGER_URL=http://localhost:8003
-FAILOVER_CONTROLLER_URL=http://localhost:8004
-SDN_CONTROLLER_URL=http://localhost:8005
-REGISTRY_SERVICE_URL=http://localhost:8001
+ETCD_ENDPOINTS=http://etcd:2379
+SCHEDULER_SERVICE_URL=http://csfx-scheduler:8002
+VOLUME_MANAGER_URL=http://csfx-volume-manager:8003
+FAILOVER_CONTROLLER_URL=http://csfx-failover-controller:8004
+SDN_CONTROLLER_URL=http://csfx-sdn-controller:8005
+REGISTRY_SERVICE_URL=http://csfx-registry:8001
 EOF
     chmod 0600 "$ENV_FILE"
 
@@ -37,10 +37,10 @@ EOF
 PATRONI_NAME=$NODE_NAME
 PATRONI_SCOPE=csfx
 PATRONI_POSTGRESQL_LISTEN=0.0.0.0:5432
-PATRONI_POSTGRESQL_CONNECT_ADDRESS=$NODE_IP:5432
+PATRONI_POSTGRESQL_CONNECT_ADDRESS=patroni:5432
 PATRONI_RESTAPI_LISTEN=0.0.0.0:8008
-PATRONI_RESTAPI_CONNECT_ADDRESS=$NODE_IP:8008
-PATRONI_ETCD3_HOSTS=$NODE_IP:2379
+PATRONI_RESTAPI_CONNECT_ADDRESS=patroni:8008
+PATRONI_ETCD3_HOSTS=etcd:2379
 PATRONI_SUPERUSER_USERNAME=postgres
 PATRONI_SUPERUSER_PASSWORD=postgres
 PATRONI_REPLICATION_USERNAME=replicator
@@ -74,10 +74,6 @@ in
     networking.firewall = {
       enable = true;
       allowedTCPPorts = [ 8000 ];
-      extraInputRules = ''
-        ip saddr 127.0.0.1/8 tcp dport { 8001, 8002, 8003, 8004, 8005 } accept
-        ip6 saddr ::1/128 tcp dport { 8001, 8002, 8003, 8004, 8005 } accept
-      '';
     };
 
     environment.etc."issue".text = ''
