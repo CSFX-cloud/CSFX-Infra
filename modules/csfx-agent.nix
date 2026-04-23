@@ -54,8 +54,9 @@ in
     systemd.services.csfx-daemon = {
       description = "CSFX Agent Daemon";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
+      after = [ "network-online.target" "csfx-cp-ready.service" ];
       wants = [ "network-online.target" ];
+      requires = [ "csfx-cp-ready.service" ];
 
       serviceConfig = {
         ExecStart = "${agentBin}/bin/csfx-agent";
