@@ -3,99 +3,155 @@
 let
   cfg = config.services.csfx-cp;
   v = versions.csfx;
-  ghcrOrg = "csfx-cloud";
-  imageRef = svc: "ghcr.io/${ghcrOrg}/csfx-ce-${svc}@${v.images.${svc}.digest}";
+  cp = v.controlPlane;
+
+  arch = if pkgs.stdenv.hostPlatform.system == "aarch64-linux" then "arm64" else "amd64";
+
+  fetchBin = name: entry:
+    pkgs.fetchurl {
+      url = entry.${arch}.url;
+      sha256 = entry.${arch}.sha256;
+    };
+
+  mkBin = name: entry:
+    pkgs.stdenv.mkDerivation {
+      pname = name;
+      version = v.version;
+      src = fetchBin name entry;
+      dontUnpack = true;
+      installPhase = ''
+        install -Dm755 $src $out/bin/${name}
+      '';
+    };
+
+  migrateBin = mkBin "csfx-migrate" cp.migrate;
+  gatewayBin = mkBin "api-gateway" cp."api-gateway";
+  registryBin = mkBin "registry" cp.registry;
+  schedulerBin = mkBin "scheduler" cp.scheduler;
+  volumeManagerBin = mkBin "volume-manager" cp."volume-manager";
+  failoverBin = mkBin "failover-controller" cp."failover-controller";
+  sdnBin = mkBin "sdn-controller" cp."sdn-controller";
+
+  commonEnv = {
+    DATABASE_URL = cfg.dbUrl;
+    ETCD_ENDPOINTS = cfg.etcdEndpoints;
+  };
+
+  mkService = { description, bin, binName, extraEnv ? {}, after ? [], requires ? [] }:
+    {
+      inherit description;
+      after = [ "network.target" "etcd.service" ] ++ after;
+      requires = requires;
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        ExecStart = "${bin}/bin/${binName}";
+        Restart = "on-failure";
+        RestartSec = "5s";
+        DynamicUser = true;
+        EnvironmentFile = cfg.envFile;
+      };
+      environment = commonEnv // extraEnv;
+    };
 in
 {
   options.services.csfx-cp = {
     enable = lib.mkEnableOption "CSFX control plane";
-
-    etcdEndpoints = lib.mkOption {
-      type = lib.types.str;
-      default = "http://etcd:2379";
-    };
 
     dbUrl = lib.mkOption {
       type = lib.types.str;
       description = "PostgreSQL connection URL";
     };
 
-    jwtSecret = lib.mkOption {
+    etcdEndpoints = lib.mkOption {
       type = lib.types.str;
-      description = "JWT signing secret";
+      default = "http://localhost:2379";
+    };
+
+    envFile = lib.mkOption {
+      type = lib.types.path;
+      default = "/etc/csfx/cp.env";
+      description = "Path to environment file with secrets (DATABASE_URL, JWT_SECRET, etc.)";
     };
   };
 
   config = lib.mkIf cfg.enable {
-    virtualisation.oci-containers.backend = "docker";
-
-    virtualisation.oci-containers.containers = {
-      csfx-api-gateway = {
-        image = imageRef "api-gateway";
-        ports = [ "8000:8000" ];
-        environment = {
-          DATABASE_URL = cfg.dbUrl;
-          ETCD_ENDPOINTS = cfg.etcdEndpoints;
-          JWT_SECRET = cfg.jwtSecret;
-          SCHEDULER_SERVICE_URL = "http://csfx-scheduler:8002";
-          VOLUME_MANAGER_URL = "http://csfx-volume-manager:8003";
-          FAILOVER_CONTROLLER_URL = "http://csfx-failover-controller:8004";
-          SDN_CONTROLLER_URL = "http://csfx-sdn-controller:8005";
-          REGISTRY_SERVICE_URL = "http://csfx-registry:8001";
-        };
-        extraOptions = [ "--network=csfx" ];
+    systemd.services.csfx-migrate = {
+      description = "CSFX database migration";
+      after = [ "network.target" "patroni.service" ];
+      requires = [ "patroni.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${migrateBin}/bin/csfx-migrate";
+        EnvironmentFile = cfg.envFile;
       };
+      environment = commonEnv;
+    };
 
-      csfx-registry = {
-        image = imageRef "registry";
-        ports = [ "8001:8001" ];
-        environment = {
-          DATABASE_URL = cfg.dbUrl;
-          ETCD_ENDPOINTS = cfg.etcdEndpoints;
-        };
-        extraOptions = [ "--network=csfx" ];
+    systemd.services.csfx-api-gateway = mkService {
+      description = "CSFX API Gateway";
+      bin = gatewayBin;
+      binName = "api-gateway";
+      after = [ "csfx-migrate.service" ];
+      requires = [ "csfx-migrate.service" ];
+      extraEnv = {
+        SCHEDULER_SERVICE_URL = "http://localhost:8002";
+        VOLUME_MANAGER_URL = "http://localhost:8003";
+        FAILOVER_CONTROLLER_URL = "http://localhost:8004";
+        SDN_CONTROLLER_URL = "http://localhost:8005";
+        REGISTRY_SERVICE_URL = "http://localhost:8001";
       };
+    };
 
-      csfx-scheduler = {
-        image = imageRef "scheduler";
-        ports = [ "8002:8002" ];
-        environment = {
-          DATABASE_URL = cfg.dbUrl;
-          ETCD_ENDPOINTS = cfg.etcdEndpoints;
-        };
-        extraOptions = [ "--network=csfx" ];
+    systemd.services.csfx-registry = mkService {
+      description = "CSFX Registry";
+      bin = registryBin;
+      binName = "registry";
+      after = [ "csfx-migrate.service" ];
+      requires = [ "csfx-migrate.service" ];
+      extraEnv = {
+        SCHEDULER_SERVICE_URL = "http://localhost:8002";
+        API_GATEWAY_URL = "http://localhost:8000";
       };
+    };
 
-      csfx-volume-manager = {
-        image = imageRef "volume-manager";
-        ports = [ "8003:8003" ];
-        environment = {
-          DATABASE_URL = cfg.dbUrl;
-          ETCD_ENDPOINTS = cfg.etcdEndpoints;
-        };
-        extraOptions = [ "--network=csfx" ];
+    systemd.services.csfx-scheduler = mkService {
+      description = "CSFX Scheduler";
+      bin = schedulerBin;
+      binName = "scheduler";
+      after = [ "csfx-migrate.service" ];
+      requires = [ "csfx-migrate.service" ];
+    };
+
+    systemd.services.csfx-volume-manager = mkService {
+      description = "CSFX Volume Manager";
+      bin = volumeManagerBin;
+      binName = "volume-manager";
+      after = [ "csfx-migrate.service" ];
+      requires = [ "csfx-migrate.service" ];
+    };
+
+    systemd.services.csfx-failover-controller = mkService {
+      description = "CSFX Failover Controller";
+      bin = failoverBin;
+      binName = "failover-controller";
+      after = [ "csfx-migrate.service" ];
+      requires = [ "csfx-migrate.service" ];
+      extraEnv = {
+        SCHEDULER_SERVICE_URL = "http://localhost:8002";
+        VOLUME_MANAGER_URL = "http://localhost:8003";
       };
+    };
 
-      csfx-failover-controller = {
-        image = imageRef "failover-controller";
-        ports = [ "8004:8004" ];
-        environment = {
-          DATABASE_URL = cfg.dbUrl;
-          ETCD_ENDPOINTS = cfg.etcdEndpoints;
-          SCHEDULER_SERVICE_URL = "http://csfx-scheduler:8002";
-          VOLUME_MANAGER_URL = "http://csfx-volume-manager:8003";
-        };
-        extraOptions = [ "--network=csfx" ];
-      };
-
-      csfx-sdn-controller = {
-        image = imageRef "sdn-controller";
-        ports = [ "8005:8005" ];
-        environment = {
-          DATABASE_URL = cfg.dbUrl;
-          ETCD_ENDPOINTS = cfg.etcdEndpoints;
-        };
-        extraOptions = [ "--network=csfx" ];
+    systemd.services.csfx-sdn-controller = mkService {
+      description = "CSFX SDN Controller";
+      bin = sdnBin;
+      binName = "sdn-controller";
+      after = [ "csfx-migrate.service" ];
+      requires = [ "csfx-migrate.service" ];
+      extraEnv = {
+        ETCD_URL = cfg.etcdEndpoints;
       };
     };
   };

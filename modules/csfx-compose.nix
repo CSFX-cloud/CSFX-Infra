@@ -5,8 +5,7 @@ let
   ghcrOrg = "csfx-cloud";
   imageRef = svc: "ghcr.io/${ghcrOrg}/csfx-ce-${svc}@${v.images.${svc}.digest}";
 
-  composeFile = pkgs.substituteAll {
-    src = ./docker-compose.yml;
+  composeFile = pkgs.replaceVars ./docker-compose.yml {
     image_api_gateway         = imageRef "api-gateway";
     image_registry            = imageRef "registry";
     image_scheduler           = imageRef "scheduler";

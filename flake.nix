@@ -2,7 +2,7 @@
   description = "CSFX Infrastructure — NixOS configurations for control plane and worker nodes";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
     pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -36,7 +36,6 @@
       csfx-agent        = import ./modules/csfx-agent.nix;
       csfx-cp           = import ./modules/csfx-cp.nix;
       csfx-binary-cache = import ./modules/csfx-binary-cache.nix;
-      csfx-compose      = import ./modules/csfx-compose.nix;
       csfx-setup        = import ./modules/csfx-setup.nix;
       update-units      = import ./modules/update-units.nix;
     };
@@ -47,7 +46,7 @@
         modules = [
           "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           self.nixosModules.csfx-agent
-          self.nixosModules.csfx-compose
+          self.nixosModules.csfx-cp
           self.nixosModules.csfx-setup
           self.nixosModules.csfx-binary-cache
           self.nixosModules.update-units
@@ -55,13 +54,16 @@
             system.stateVersion = "24.11";
             services.csfx-agent.enable = true;
             services.csfx-agent.gatewayUrl = "http://localhost:8000";
+            services.csfx-cp.enable = true;
+            services.csfx-cp.dbUrl = "";
+            services.csfx-cp.etcdEndpoints = "http://localhost:2379";
             services.csfx-setup.enable = true;
             services.csfx-binary-cache.enable = true;
             services.csfx-update-units.enable = true;
             services.csfx-update-units.nixCacheUrl = "http://localhost:5000";
             services.csfx-update-units.nixCachePublicKey = "";
             services.csfx-update-units.nixosConfig = "csfx-node";
-            isoImage.isoName = lib.mkForce "csfx-node.iso";
+            image.fileName = lib.mkForce "csfx-node.iso";
           })
         ];
       };
@@ -71,7 +73,7 @@
         modules = [
           "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
           self.nixosModules.csfx-agent
-          self.nixosModules.csfx-compose
+          self.nixosModules.csfx-cp
           self.nixosModules.csfx-setup
           self.nixosModules.csfx-binary-cache
           self.nixosModules.update-units
@@ -79,13 +81,16 @@
             system.stateVersion = "24.11";
             services.csfx-agent.enable = true;
             services.csfx-agent.gatewayUrl = "http://localhost:8000";
+            services.csfx-cp.enable = true;
+            services.csfx-cp.dbUrl = "";
+            services.csfx-cp.etcdEndpoints = "http://localhost:2379";
             services.csfx-setup.enable = true;
             services.csfx-binary-cache.enable = true;
             services.csfx-update-units.enable = true;
             services.csfx-update-units.nixCacheUrl = "http://localhost:5000";
             services.csfx-update-units.nixCachePublicKey = "";
             services.csfx-update-units.nixosConfig = "csfx-node-arm64";
-            isoImage.isoName = lib.mkForce "csfx-node-arm64.iso";
+            image.fileName = lib.mkForce "csfx-node-arm64.iso";
           })
         ];
       };
