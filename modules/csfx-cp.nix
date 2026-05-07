@@ -231,7 +231,7 @@ in
           done
 
           if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
-            echo "[ERROR] postgres not ready after timeout elapsed=${TIMEOUT}s"
+            echo "[ERROR] postgres not ready after timeout elapsed=''${TIMEOUT}s"
             exit 1
           fi
 
