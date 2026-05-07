@@ -277,6 +277,10 @@ in
       };
     };
 
+    systemd.tmpfiles.rules = [
+      "d /run/postgresql 0755 patroni patroni -"
+    ];
+
     environment.systemPackages = [ statusScript ];
   };
 }
