@@ -162,7 +162,7 @@ in
       postgresqlPackage = pkgs.postgresql_16;
 
       settings = {
-        etcd3.hosts = cfg.etcdEndpoints;
+        etcd3.hosts = [ "127.0.0.1:2379" ];
         bootstrap = {
           dcs = {
             ttl                     = 30;
