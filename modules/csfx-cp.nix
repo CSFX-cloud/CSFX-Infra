@@ -172,7 +172,7 @@ in
           };
           initdb = [
             { encoding = "UTF8"; }
-            { "data-checksums" = true; }
+            "data-checksums"
           ];
           pg_hba = [
             "local all all trust"

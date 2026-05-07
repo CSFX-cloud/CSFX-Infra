@@ -29,7 +29,8 @@ EOF
 
     printf '%s' "$PG_SUPERUSER_PASSWORD"   > /etc/csfx/patroni-superuser-password
     printf '%s' "$PG_REPLICATION_PASSWORD" > /etc/csfx/patroni-replication-password
-    chmod 0600 /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
+    chown root:patroni /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
+    chmod 0640 /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
 
     touch "$DONE_FILE"
   '';
