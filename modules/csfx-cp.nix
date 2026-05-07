@@ -62,6 +62,7 @@ let
     services=(
       "patroni:5432:PostgreSQL HA"
       "etcd:2379:etcd"
+      "csfx-db-init::DB Init"
       "csfx-migrate::DB Migration"
       "csfx-api-gateway:8000:API Gateway"
       "csfx-registry:8001:Registry"
@@ -179,10 +180,6 @@ in
             "host replication replicator 127.0.0.1/32 md5"
             "host all all 127.0.0.1/32 md5"
           ];
-          users.csfx = {
-            password = "CSFX_APP_PASSWORD";
-            options  = [ "createdb" ];
-          };
         };
         postgresql.authentication = {
           replication.username = "replicator";
@@ -208,10 +205,59 @@ in
       advertiseClientUrls = [ "http://127.0.0.1:2379" ];
     };
 
-    systemd.services.csfx-migrate = {
-      description = "CSFX database migration";
+    systemd.services.csfx-db-init = {
+      description = "CSFX database user and schema init";
       after    = [ "network.target" "patroni.service" ];
       requires = [ "patroni.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type            = "oneshot";
+        RemainAfterExit = true;
+        User            = "root";
+        EnvironmentFile = cfg.envFile;
+        ExecStart       = pkgs.writeShellScript "csfx-db-init" ''
+          set -euo pipefail
+
+          PSQL="${pkgs.postgresql_16}/bin/psql"
+          TIMEOUT=60
+          ELAPSED=0
+
+          while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+            if "$PSQL" -U postgres -h 127.0.0.1 -c "SELECT 1" postgres > /dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+            ELAPSED=$((ELAPSED + 2))
+          done
+
+          if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+            echo "[ERROR] postgres not ready after timeout elapsed=${TIMEOUT}s"
+            exit 1
+          fi
+
+          DB_PASS=$(echo "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|')
+
+          "$PSQL" -U postgres -h 127.0.0.1 postgres <<SQL
+          DO \$\$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'csfx') THEN
+              CREATE ROLE csfx WITH LOGIN PASSWORD '$DB_PASS' CREATEDB;
+            ELSE
+              ALTER ROLE csfx WITH PASSWORD '$DB_PASS';
+            END IF;
+          END
+          \$\$;
+          SELECT 'CREATE DATABASE csfx' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'csfx')\gexec
+          SQL
+        '';
+      };
+      environment = { DATABASE_URL = cfg.dbUrl; };
+    };
+
+    systemd.services.csfx-migrate = {
+      description = "CSFX database migration";
+      after    = [ "network.target" "csfx-db-init.service" ];
+      requires = [ "csfx-db-init.service" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         Type              = "oneshot";
