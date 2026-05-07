@@ -247,7 +247,12 @@ in
             END IF;
           END
           \$\$;
-          SELECT 'CREATE DATABASE csfx' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'csfx')\gexec
+          SELECT 'CREATE DATABASE csfx OWNER csfx' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'csfx')\gexec
+          SQL
+
+          "$PSQL" -U postgres -h 127.0.0.1 csfx <<SQL
+          GRANT ALL ON SCHEMA public TO csfx;
+          ALTER SCHEMA public OWNER TO csfx;
           SQL
         '';
       };
