@@ -1,9 +1,6 @@
 {
   csfx = {
     version = "0.2.2-alpha.462";
-    images = {
-      patroni = { digest = "sha256:f03bce9c5378aea4dcdcf3ffaa8331193363383e74c71b81956b17e4fe9ccb82"; };
-    };
     agent = {
       amd64 = {
         url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.462/csfx-agent-amd64";

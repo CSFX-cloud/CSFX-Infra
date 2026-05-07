@@ -17,38 +17,19 @@ let
 
     JWT_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
     DB_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
-    NODE_NAME=$(${pkgs.nettools}/bin/hostname -s)
-    NODE_IP=$(${pkgs.iproute2}/bin/ip route get 1 | ${pkgs.gawk}/bin/awk '{print $7; exit}')
+    PG_SUPERUSER_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+    PG_REPLICATION_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
 
     cat > "$ENV_FILE" <<EOF
-DATABASE_URL=postgres://csfx:$DB_PASSWORD@patroni:5432/csfx
+DATABASE_URL=postgres://csfx:$DB_PASSWORD@localhost:5432/csfx
 JWT_SECRET=$JWT_SECRET
-ETCD_ENDPOINTS=http://etcd:2379
-SCHEDULER_SERVICE_URL=http://csfx-scheduler:8002
-VOLUME_MANAGER_URL=http://csfx-volume-manager:8003
-FAILOVER_CONTROLLER_URL=http://csfx-failover-controller:8004
-SDN_CONTROLLER_URL=http://csfx-sdn-controller:8005
-REGISTRY_SERVICE_URL=http://csfx-registry:8001
+ETCD_ENDPOINTS=http://localhost:2379
 EOF
     chmod 0600 "$ENV_FILE"
 
-    PATRONI_ENV_FILE="/etc/csfx/patroni.env"
-    cat > "$PATRONI_ENV_FILE" <<EOF
-PATRONI_NAME=$NODE_NAME
-PATRONI_SCOPE=csfx
-PATRONI_POSTGRESQL_LISTEN=0.0.0.0:5432
-PATRONI_POSTGRESQL_CONNECT_ADDRESS=patroni:5432
-PATRONI_RESTAPI_LISTEN=0.0.0.0:8008
-PATRONI_RESTAPI_CONNECT_ADDRESS=patroni:8008
-PATRONI_ETCD3_HOSTS=etcd:2379
-PATRONI_SUPERUSER_USERNAME=postgres
-PATRONI_SUPERUSER_PASSWORD=postgres
-PATRONI_REPLICATION_USERNAME=replicator
-PATRONI_REPLICATION_PASSWORD=replicator
-PATRONI_APP_PASSWORD=$DB_PASSWORD
-PGDATA=/data/pgdata
-EOF
-    chmod 0600 "$PATRONI_ENV_FILE"
+    printf '%s' "$PG_SUPERUSER_PASSWORD"   > /etc/csfx/patroni-superuser-password
+    printf '%s' "$PG_REPLICATION_PASSWORD" > /etc/csfx/patroni-replication-password
+    chmod 0600 /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
 
     touch "$DONE_FILE"
   '';
@@ -86,53 +67,36 @@ in
       ${logo}
       CSFX Node — v${versions.csfx.version}
       Access this node only via the CSFX API or CLI.
+      Run 'csfx-status' for control plane overview.
 
     '';
 
     systemd.services.csfx-setup = {
       description = "CSFX first-boot bootstrap";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      before = [ "csfx-daemon.service" ];
+      after    = [ "network-online.target" ];
+      wants    = [ "network-online.target" ];
+      before   = [ "csfx-migrate.service" ];
 
       serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = setupScript;
-        User = "root";
-      };
-    };
-
-    systemd.services.csfx-cp = {
-      description = "CSFX Control Plane (Docker Compose)";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "docker.service" "csfx-setup.service" ];
-      requires = [ "docker.service" ];
-      wants = [ "csfx-setup.service" ];
-      unitConfig.ConditionPathExists = "/var/lib/csfx/.setup-complete";
-
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        EnvironmentFile = "/etc/csfx/cp.env";
-        ExecStart = "${pkgs.docker-compose}/bin/docker-compose -f /etc/csfx/docker-compose.yml up -d --remove-orphans";
-        ExecStop = "${pkgs.docker-compose}/bin/docker-compose -f /etc/csfx/docker-compose.yml down";
-        User = "root";
+        Type             = "oneshot";
+        RemainAfterExit  = true;
+        ExecStart        = setupScript;
+        User             = "root";
       };
     };
 
     systemd.services.csfx-cp-ready = {
       description = "CSFX Control Plane readiness check";
       wantedBy = [ "multi-user.target" ];
-      after = [ "csfx-cp.service" ];
-      requires = [ "csfx-cp.service" ];
+      after    = [ "csfx-api-gateway.service" ];
+      requires = [ "csfx-api-gateway.service" ];
 
       serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        User = "root";
-        ExecStart = pkgs.writeShellScript "csfx-cp-ready" ''
+        Type             = "oneshot";
+        RemainAfterExit  = true;
+        User             = "root";
+        ExecStart        = pkgs.writeShellScript "csfx-cp-ready" ''
           set -euo pipefail
 
           CURL=${pkgs.curl}/bin/curl
@@ -159,9 +123,5 @@ in
       after = [ "csfx-cp-ready.service" ];
       wants = [ "csfx-cp-ready.service" ];
     };
-
-    virtualisation.docker.enable = true;
-
-    environment.systemPackages = [ pkgs.docker-compose ];
   };
 }
