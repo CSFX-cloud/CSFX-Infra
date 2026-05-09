@@ -74,6 +74,7 @@ in
       environment = {
         CSFX_GATEWAY_URL = cfg.gatewayUrl;
         CSFX_HEARTBEAT_INTERVAL = toString cfg.heartbeatInterval;
+      } // lib.optionalAttrs (cfg.registrationToken != "") {
         CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
       };
     };
