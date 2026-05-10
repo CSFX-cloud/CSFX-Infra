@@ -28,6 +28,7 @@ let
   volumeManagerBin = mkBin "volume-manager"      cp."volume-manager";
   failoverBin     = mkBin "failover-controller"  cp."failover-controller";
   sdnBin          = mkBin "sdn-controller"       cp."sdn-controller";
+  updaterBin      = mkBin "csfx-updater"         cp."csfx-updater";
 
   commonEnv = {
     DATABASE_URL    = cfg.dbUrl;
@@ -70,7 +71,8 @@ let
       "csfx-volume-manager:8003:Volume Manager"
       "csfx-failover-controller:8004:Failover Controller"
       "csfx-sdn-controller:8005:SDN Controller"
-      "csfx-daemon::Agent Daemon"
+      "csfx-agent::Agent"
+      "csfx-updater::Updater"
     )
 
     printf "\n''${BOLD}''${CYAN}CSFX Control Plane — $(hostname)''${RESET}\n"
@@ -151,6 +153,34 @@ in
       type = lib.types.path;
       default = "/etc/csfx/cp.env";
       description = "Path to environment file with secrets";
+    };
+
+    updater = {
+      infraRepoMirrorUrl = lib.mkOption {
+        type = lib.types.str;
+        description = "Git remote URL to mirror CSFX-Infra from";
+      };
+
+      infraRepoGithub = lib.mkOption {
+        type = lib.types.str;
+        default = "CSFX-cloud/CSFX-Infra";
+        description = "GitHub repo slug for tag resolution (owner/repo)";
+      };
+
+      infraRepoBranch = lib.mkOption {
+        type = lib.types.str;
+        default = "main";
+      };
+
+      pollIntervalSecs = lib.mkOption {
+        type = lib.types.int;
+        default = 120;
+      };
+
+      mirrorDir = lib.mkOption {
+        type = lib.types.str;
+        default = "/var/lib/csfx-updater/infra.git";
+      };
     };
   };
 
@@ -325,6 +355,31 @@ in
       binName     = "sdn-controller";
       extraEnv = {
         ETCD_URL = cfg.etcdEndpoints;
+      };
+    };
+
+    systemd.services.csfx-updater = {
+      description = "CSFX Updater — resolves versions and coordinates node updates via etcd";
+      wantedBy = [ "multi-user.target" ];
+      after    = [ "network-online.target" "etcd.service" ];
+      wants    = [ "network-online.target" ];
+      requires = [ "etcd.service" ];
+
+      serviceConfig = {
+        ExecStart   = "${updaterBin}/bin/csfx-updater";
+        Restart     = "on-failure";
+        RestartSec  = "10s";
+        DynamicUser = true;
+        StateDirectory = "csfx-updater";
+      };
+
+      environment = {
+        ETCD_ENDPOINTS          = cfg.etcdEndpoints;
+        INFRA_REPO_MIRROR_URL   = cfg.updater.infraRepoMirrorUrl;
+        INFRA_REPO_GITHUB       = cfg.updater.infraRepoGithub;
+        INFRA_REPO_BRANCH       = cfg.updater.infraRepoBranch;
+        INFRA_REPO_MIRROR_DIR   = cfg.updater.mirrorDir;
+        POLL_INTERVAL_SECS      = toString cfg.updater.pollIntervalSecs;
       };
     };
 

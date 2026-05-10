@@ -38,7 +38,7 @@ in
     users.users.csfx-agent = {
       isSystemUser = true;
       group = "csfx-agent";
-      home = "/var/lib/csfx-daemon";
+      home = "/var/lib/csfx-agent";
       createHome = true;
     };
 
@@ -46,13 +46,13 @@ in
     users.groups.csfx-updater = {};
 
     systemd.tmpfiles.rules = [
-      "d /var/lib/csfx-daemon 0750 csfx-agent csfx-agent -"
+      "d /var/lib/csfx-agent 0750 csfx-agent csfx-agent -"
       "f /var/lib/csfx/update_trigger 0660 csfx-agent csfx-updater -"
       "d /var/lib/csfx 0750 csfx-agent csfx-updater -"
     ];
 
-    systemd.services.csfx-daemon = {
-      description = "CSFX Agent Daemon";
+    systemd.services.csfx-agent = {
+      description = "CSFX Agent";
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" "csfx-cp-ready.service" ];
       wants = [ "network-online.target" ];
@@ -66,7 +66,7 @@ in
         RestartSec = "10s";
         PrivateTmp = true;
         ProtectSystem = "strict";
-        ReadWritePaths = [ "/var/lib/csfx-daemon" "/var/lib/csfx" ];
+        ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ];
         NoNewPrivileges = true;
         CapabilityBoundingSet = "";
       };

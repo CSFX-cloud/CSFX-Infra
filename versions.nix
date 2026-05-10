@@ -82,6 +82,16 @@
           sha256 = "81a011e8cad4513647c3137fd25293fe16f5b5b079f746a73ec9c6c63eb6b409";
         };
       };
+      csfx-updater = {
+        amd64 = {
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.463/csfx-cp-csfx-updater-amd64";
+          sha256 = "0000000000000000000000000000000000000000000000000000000000000000";
+        };
+        arm64 = {
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.463/csfx-cp-csfx-updater-arm64";
+          sha256 = "0000000000000000000000000000000000000000000000000000000000000000";
+        };
+      };
     };
   };
 }

@@ -51,8 +51,8 @@ in
       })
     ];
 
-    systemd.services.csfx-os-updater = {
-      description = "CSFX OS updater — nixos-rebuild switch on new flake rev";
+    systemd.services.csfx-node-updater = {
+      description = "CSFX Node Updater — nixos-rebuild switch on new flake rev";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       onSuccess = [ "csfx-watchdog.timer" ];
@@ -60,7 +60,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         User = "root";
-        ExecStart = pkgs.writeShellScript "csfx-os-updater" ''
+        ExecStart = pkgs.writeShellScript "csfx-node-updater" ''
           set -euo pipefail
 
           TRIGGER_FILE="/var/lib/csfx/update_trigger"
@@ -86,7 +86,7 @@ in
       wantedBy = [ "multi-user.target" ];
       pathConfig = {
         PathModified = "/var/lib/csfx/update_trigger";
-        Unit = "csfx-os-updater.service";
+        Unit = "csfx-node-updater.service";
       };
     };
 

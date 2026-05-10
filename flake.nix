@@ -57,6 +57,9 @@
             services.csfx-cp.enable = true;
             services.csfx-cp.dbUrl = "";
             services.csfx-cp.etcdEndpoints = "http://localhost:2379";
+            services.csfx-cp.updater.infraRepoMirrorUrl = "https://github.com/CSFX-cloud/CSFX-Infra.git";
+            services.csfx-cp.updater.infraRepoGithub = "CSFX-cloud/CSFX-Infra";
+            services.csfx-cp.updater.infraRepoBranch = "main";
             services.csfx-setup.enable = true;
             services.csfx-binary-cache.enable = true;
             services.csfx-update-units.enable = true;
@@ -84,6 +87,9 @@
             services.csfx-cp.enable = true;
             services.csfx-cp.dbUrl = "";
             services.csfx-cp.etcdEndpoints = "http://localhost:2379";
+            services.csfx-cp.updater.infraRepoMirrorUrl = "https://github.com/CSFX-cloud/CSFX-Infra.git";
+            services.csfx-cp.updater.infraRepoGithub = "CSFX-cloud/CSFX-Infra";
+            services.csfx-cp.updater.infraRepoBranch = "main";
             services.csfx-setup.enable = true;
             services.csfx-binary-cache.enable = true;
             services.csfx-update-units.enable = true;
