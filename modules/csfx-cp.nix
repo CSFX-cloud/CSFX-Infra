@@ -366,6 +366,8 @@ in
       wants    = [ "network-online.target" ];
       requires = [ "etcd.service" ];
 
+      path = [ pkgs.git ];
+
       serviceConfig = {
         ExecStart  = "${updaterBin}/bin/csfx-updater";
         Restart    = "on-failure";

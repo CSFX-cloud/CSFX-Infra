@@ -3,10 +3,45 @@
 let
   cfg = config.services.csfx-setup;
 
+  diskSetupScript = pkgs.writeShellScript "csfx-disk-setup" ''
+    set -euo pipefail
+
+    DISK="${cfg.dataDisk}"
+    PART="''${DISK}1"
+    MOUNT="/var/lib/csfx-data"
+
+    if mountpoint -q "$MOUNT"; then
+      exit 0
+    fi
+
+    if ! blkid "$PART" > /dev/null 2>&1; then
+      echo "[INFO] partitioning disk=''${DISK}"
+      ${pkgs.parted}/bin/parted -s "$DISK" mklabel gpt
+      ${pkgs.parted}/bin/parted -s "$DISK" mkpart primary ext4 0% 100%
+      ${pkgs.e2fsprogs}/bin/mkfs.ext4 -L csfx-data "$PART"
+      echo "[INFO] disk partitioned and formatted"
+    fi
+
+    mkdir -p "$MOUNT"
+    mount "$PART" "$MOUNT"
+    echo "[INFO] disk mounted mount=''${MOUNT}"
+
+    mkdir -p \
+      "$MOUNT/csfx" \
+      "$MOUNT/postgresql" \
+      "$MOUNT/etcd" \
+      "$MOUNT/csfx-updater"
+
+    chown patroni:patroni "$MOUNT/postgresql"
+    chown etcd:etcd "$MOUNT/etcd" 2>/dev/null || true
+    chown csfx-updater:csfx-updater "$MOUNT/csfx-updater" 2>/dev/null || true
+    chmod 0700 "$MOUNT/postgresql"
+  '';
+
   setupScript = pkgs.writeShellScript "csfx-setup" ''
     set -euo pipefail
 
-    DONE_FILE="/var/lib/csfx/.setup-complete"
+    DONE_FILE="/var/lib/csfx-data/csfx/.setup-complete"
     ENV_FILE="/etc/csfx/cp.env"
 
     if [ -f "$DONE_FILE" ]; then
@@ -35,6 +70,25 @@ EOF
     touch "$DONE_FILE"
   '';
 
+  mountScript = pkgs.writeShellScript "csfx-mount-data" ''
+    set -euo pipefail
+
+    PART="${cfg.dataDisk}1"
+    MOUNT="/var/lib/csfx-data"
+
+    if mountpoint -q "$MOUNT"; then
+      exit 0
+    fi
+
+    mkdir -p "$MOUNT"
+    mount "$PART" "$MOUNT"
+    echo "[INFO] data partition mounted mount=''${MOUNT}"
+
+    ln -sfn "$MOUNT/postgresql" /var/lib/postgresql
+    ln -sfn "$MOUNT/csfx" /var/lib/csfx-persistent
+    ln -sfn "$MOUNT/csfx-updater" /var/lib/csfx-updater-data
+  '';
+
   logo = ''
      ██████╗███████╗███████╗██╗  ██╗
     ██╔════╝██╔════╝██╔════╝╚██╗██╔╝
@@ -48,6 +102,12 @@ in
 {
   options.services.csfx-setup = {
     enable = lib.mkEnableOption "CSFX first-boot bootstrap";
+
+    dataDisk = lib.mkOption {
+      type = lib.types.str;
+      default = "/dev/sda";
+      description = "Block device used for persistent data (PostgreSQL, etcd, config)";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -72,19 +132,54 @@ in
 
     '';
 
+    systemd.services.csfx-disk-setup = {
+      description = "CSFX first-boot disk partitioning and formatting";
+      wantedBy = [ "multi-user.target" ];
+      before   = [ "csfx-mount-data.service" "patroni.service" "etcd.service" ];
+      after    = [ "local-fs.target" ];
+
+      serviceConfig = {
+        Type            = "oneshot";
+        RemainAfterExit = true;
+        ExecStart       = diskSetupScript;
+        User            = "root";
+      };
+    };
+
+    systemd.services.csfx-mount-data = {
+      description = "CSFX mount persistent data partition";
+      wantedBy = [ "multi-user.target" ];
+      after    = [ "csfx-disk-setup.service" ];
+      requires = [ "csfx-disk-setup.service" ];
+      before   = [ "patroni.service" "etcd.service" "csfx-setup.service" ];
+
+      serviceConfig = {
+        Type            = "oneshot";
+        RemainAfterExit = true;
+        ExecStart       = mountScript;
+        User            = "root";
+      };
+    };
+
     systemd.services.csfx-setup = {
       description = "CSFX first-boot bootstrap";
       wantedBy = [ "multi-user.target" ];
-      after    = [ "network-online.target" ];
+      after    = [ "network-online.target" "csfx-mount-data.service" ];
       wants    = [ "network-online.target" ];
+      requires = [ "csfx-mount-data.service" ];
       before   = [ "csfx-migrate.service" ];
 
       serviceConfig = {
-        Type             = "oneshot";
-        RemainAfterExit  = true;
-        ExecStart        = setupScript;
-        User             = "root";
+        Type            = "oneshot";
+        RemainAfterExit = true;
+        ExecStart       = setupScript;
+        User            = "root";
       };
+    };
+
+    systemd.services.patroni = {
+      after    = [ "csfx-mount-data.service" ];
+      requires = [ "csfx-mount-data.service" ];
     };
 
     systemd.services.csfx-cp-ready = {
@@ -94,10 +189,10 @@ in
       requires = [ "csfx-api-gateway.service" ];
 
       serviceConfig = {
-        Type             = "oneshot";
-        RemainAfterExit  = true;
-        User             = "root";
-        ExecStart        = pkgs.writeShellScript "csfx-cp-ready" ''
+        Type            = "oneshot";
+        RemainAfterExit = true;
+        User            = "root";
+        ExecStart       = pkgs.writeShellScript "csfx-cp-ready" ''
           set -euo pipefail
 
           CURL=${pkgs.curl}/bin/curl
