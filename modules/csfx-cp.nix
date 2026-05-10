@@ -367,11 +367,11 @@ in
       requires = [ "etcd.service" ];
 
       serviceConfig = {
-        ExecStart      = "${updaterBin}/bin/csfx-updater";
-        Restart        = "on-failure";
-        RestartSec     = "10s";
-        DynamicUser    = true;
-        StateDirectory = "csfx-updater";
+        ExecStart  = "${updaterBin}/bin/csfx-updater";
+        Restart    = "on-failure";
+        RestartSec = "10s";
+        User       = "csfx-updater";
+        Group      = "csfx-updater";
       };
 
       environment = {

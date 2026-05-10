@@ -45,8 +45,16 @@ in
     users.groups.csfx-agent = {};
     users.groups.csfx-updater = {};
 
+    users.users.csfx-updater = {
+      isSystemUser = true;
+      group = "csfx-updater";
+      home = "/var/lib/csfx-updater";
+      createHome = true;
+    };
+
     systemd.tmpfiles.rules = [
       "d /var/lib/csfx-agent 0750 csfx-agent csfx-agent -"
+      "d /var/lib/csfx-updater 0750 csfx-updater csfx-updater -"
       "f /var/lib/csfx/update_trigger 0660 csfx-agent csfx-updater -"
       "d /var/lib/csfx 0750 csfx-agent csfx-updater -"
     ];
