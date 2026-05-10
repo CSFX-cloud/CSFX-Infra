@@ -28,7 +28,8 @@ let
   volumeManagerBin = mkBin "volume-manager"      cp."volume-manager";
   failoverBin     = mkBin "failover-controller"  cp."failover-controller";
   sdnBin          = mkBin "sdn-controller"       cp."sdn-controller";
-  updaterBin      = mkBin "csfx-updater"         cp."csfx-updater";
+  hasUpdater      = cp ? "csfx-updater";
+  updaterBin      = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
 
   commonEnv = {
     DATABASE_URL    = cfg.dbUrl;
@@ -358,7 +359,7 @@ in
       };
     };
 
-    systemd.services.csfx-updater = {
+    systemd.services.csfx-updater = lib.mkIf hasUpdater {
       description = "CSFX Updater — resolves versions and coordinates node updates via etcd";
       wantedBy = [ "multi-user.target" ];
       after    = [ "network-online.target" "etcd.service" ];
@@ -366,20 +367,20 @@ in
       requires = [ "etcd.service" ];
 
       serviceConfig = {
-        ExecStart   = "${updaterBin}/bin/csfx-updater";
-        Restart     = "on-failure";
-        RestartSec  = "10s";
-        DynamicUser = true;
+        ExecStart      = "${updaterBin}/bin/csfx-updater";
+        Restart        = "on-failure";
+        RestartSec     = "10s";
+        DynamicUser    = true;
         StateDirectory = "csfx-updater";
       };
 
       environment = {
-        ETCD_ENDPOINTS          = cfg.etcdEndpoints;
-        INFRA_REPO_MIRROR_URL   = cfg.updater.infraRepoMirrorUrl;
-        INFRA_REPO_GITHUB       = cfg.updater.infraRepoGithub;
-        INFRA_REPO_BRANCH       = cfg.updater.infraRepoBranch;
-        INFRA_REPO_MIRROR_DIR   = cfg.updater.mirrorDir;
-        POLL_INTERVAL_SECS      = toString cfg.updater.pollIntervalSecs;
+        ETCD_ENDPOINTS        = cfg.etcdEndpoints;
+        INFRA_REPO_MIRROR_URL = cfg.updater.infraRepoMirrorUrl;
+        INFRA_REPO_GITHUB     = cfg.updater.infraRepoGithub;
+        INFRA_REPO_BRANCH     = cfg.updater.infraRepoBranch;
+        INFRA_REPO_MIRROR_DIR = cfg.updater.mirrorDir;
+        POLL_INTERVAL_SECS    = toString cfg.updater.pollIntervalSecs;
       };
     };
 
