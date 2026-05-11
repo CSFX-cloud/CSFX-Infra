@@ -9,12 +9,15 @@ let
     DISK="${cfg.dataDisk}"
     PART="''${DISK}1"
     MOUNT="/var/lib/csfx-data"
+    MOUNT_BIN="${pkgs.util-linux}/bin/mount"
+    MOUNTPOINT_BIN="${pkgs.util-linux}/bin/mountpoint"
+    BLKID_BIN="${pkgs.util-linux}/bin/blkid"
 
-    if mountpoint -q "$MOUNT"; then
+    if "$MOUNTPOINT_BIN" -q "$MOUNT"; then
       exit 0
     fi
 
-    if ! blkid "$PART" > /dev/null 2>&1; then
+    if ! "$BLKID_BIN" "$PART" > /dev/null 2>&1; then
       echo "[INFO] partitioning disk=''${DISK}"
       ${pkgs.parted}/bin/parted -s "$DISK" mklabel gpt
       ${pkgs.parted}/bin/parted -s "$DISK" mkpart primary ext4 0% 100%
@@ -23,7 +26,7 @@ let
     fi
 
     mkdir -p "$MOUNT"
-    mount "$PART" "$MOUNT"
+    "$MOUNT_BIN" "$PART" "$MOUNT"
     echo "[INFO] disk mounted mount=''${MOUNT}"
 
     mkdir -p \
@@ -75,13 +78,15 @@ EOF
 
     PART="${cfg.dataDisk}1"
     MOUNT="/var/lib/csfx-data"
+    MOUNT_BIN="${pkgs.util-linux}/bin/mount"
+    MOUNTPOINT_BIN="${pkgs.util-linux}/bin/mountpoint"
 
-    if mountpoint -q "$MOUNT"; then
+    if "$MOUNTPOINT_BIN" -q "$MOUNT"; then
       exit 0
     fi
 
     mkdir -p "$MOUNT"
-    mount "$PART" "$MOUNT"
+    "$MOUNT_BIN" "$PART" "$MOUNT"
     echo "[INFO] data partition mounted mount=''${MOUNT}"
 
     ln -sfn "$MOUNT/postgresql" /var/lib/postgresql
