@@ -61,6 +61,8 @@
             services.csfx-cp.updater.infraRepoGithub = "CSFX-cloud/CSFX-Infra";
             services.csfx-cp.updater.infraRepoBranch = "main";
             services.csfx-setup.enable = true;
+            services.csfx-setup.dataPart = "/dev/sda3";
+            services.csfx-setup.dataSize = "100%";
             services.csfx-binary-cache.enable = true;
             services.csfx-update-units.enable = true;
             services.csfx-update-units.nixCacheUrl = "http://localhost:5000";
@@ -91,6 +93,8 @@
             services.csfx-cp.updater.infraRepoGithub = "CSFX-cloud/CSFX-Infra";
             services.csfx-cp.updater.infraRepoBranch = "main";
             services.csfx-setup.enable = true;
+            services.csfx-setup.dataPart = "/dev/sda3";
+            services.csfx-setup.dataSize = "100%";
             services.csfx-binary-cache.enable = true;
             services.csfx-update-units.enable = true;
             services.csfx-update-units.nixCacheUrl = "http://localhost:5000";

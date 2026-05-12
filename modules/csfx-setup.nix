@@ -6,8 +6,8 @@ let
   diskSetupScript = pkgs.writeShellScript "csfx-disk-setup" ''
     set -euo pipefail
 
-    DISK="${cfg.dataDisk}"
-    PART="''${DISK}1"
+    PART="${cfg.dataPart}"
+    DISK=$(${pkgs.util-linux}/bin/lsblk -no PKNAME "$PART" 2>/dev/null || echo "''${PART%[0-9]*}")
     MOUNT="/var/lib/csfx-data"
 
     if ${pkgs.util-linux}/bin/mountpoint -q "$MOUNT"; then
@@ -15,11 +15,16 @@ let
     fi
 
     if ! ${pkgs.util-linux}/bin/blkid "$PART" > /dev/null 2>&1; then
-      echo "[INFO] partitioning disk=''${DISK}"
-      ${pkgs.parted}/bin/parted -s "$DISK" mklabel gpt
-      ${pkgs.parted}/bin/parted -s "$DISK" mkpart primary ext4 0% 100%
+      SIZE="${cfg.dataSize}"
+      echo "[INFO] creating data partition part=''${PART} size=''${SIZE}"
+      if [ "$SIZE" = "100%" ]; then
+        ${pkgs.parted}/bin/parted -s "$DISK" mkpart primary ext4 -- -1MiB 100%
+      else
+        ${pkgs.parted}/bin/parted -s "$DISK" mkpart primary ext4 -- -''${SIZE} 100%
+      fi
+      ${pkgs.util-linux}/bin/udevadm settle
       ${pkgs.e2fsprogs}/bin/mkfs.ext4 -L csfx-data "$PART"
-      echo "[INFO] disk partitioned and formatted"
+      echo "[INFO] data partition created and formatted part=''${PART} size=''${SIZE}"
     fi
 
     mkdir -p "$MOUNT"
@@ -73,7 +78,7 @@ EOF
   mountScript = pkgs.writeShellScript "csfx-mount-data" ''
     set -euo pipefail
 
-    PART="${cfg.dataDisk}1"
+    PART="${cfg.dataPart}"
     MOUNT="/var/lib/csfx-data"
 
     if ${pkgs.util-linux}/bin/mountpoint -q "$MOUNT"; then
@@ -103,10 +108,17 @@ in
   options.services.csfx-setup = {
     enable = lib.mkEnableOption "CSFX first-boot bootstrap";
 
-    dataDisk = lib.mkOption {
+    dataPart = lib.mkOption {
       type = lib.types.str;
-      default = "/dev/sda";
-      description = "Block device used for persistent data (PostgreSQL, etcd, config)";
+      default = "/dev/sda3";
+      description = "Partition device for persistent data (PostgreSQL, etcd, config). Must not be the boot partition.";
+    };
+
+    dataSize = lib.mkOption {
+      type = lib.types.str;
+      default = "100%";
+      example = "50GiB";
+      description = "Size of the data partition. Use '100%' to fill remaining disk space, or a fixed size like '20GiB'.";
     };
   };
 
