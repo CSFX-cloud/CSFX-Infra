@@ -26,7 +26,7 @@ let
       else
         ${pkgs.parted}/bin/parted -s "$DISK" mkpart primary ext4 -- -''${SIZE} 100%
       fi
-      ${pkgs.util-linux}/bin/udevadm settle
+      ${pkgs.systemd}/bin/udevadm settle
       ${pkgs.e2fsprogs}/bin/mkfs.ext4 -L csfx-data "$PART"
       echo "[INFO] data partition created and formatted part=''${PART} size=''${SIZE}"
     fi
