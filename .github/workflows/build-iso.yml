@@ -24,10 +24,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - config: csfx-node
+          - config: csfx-node-iso
             arch: amd64
             runner: ubuntu-latest
-          - config: csfx-node-arm64
+          - config: csfx-node-iso-arm64
             arch: arm64
             runner: ubuntu-24.04-arm
 
@@ -96,8 +96,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Config | Arch | URL |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|------|-----|" >> $GITHUB_STEP_SUMMARY
-          echo "| csfx-node | amd64 | ${BASE}/csfx-node-amd64.iso |" >> $GITHUB_STEP_SUMMARY
-          echo "| csfx-node-arm64 | arm64 | ${BASE}/csfx-node-arm64-arm64.iso |" >> $GITHUB_STEP_SUMMARY
+          echo "| csfx-node-iso | amd64 | ${BASE}/csfx-node-iso-amd64.iso |" >> $GITHUB_STEP_SUMMARY
+          echo "| csfx-node-iso-arm64 | arm64 | ${BASE}/csfx-node-iso-arm64-arm64.iso |" >> $GITHUB_STEP_SUMMARY
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -140,7 +140,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Config | Arch | URL |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|------|-----|" >> $GITHUB_STEP_SUMMARY
-          echo "| csfx-node | amd64 | ${BASE}/csfx-node-amd64.iso |" >> $GITHUB_STEP_SUMMARY
-          echo "| csfx-node-arm64 | arm64 | ${BASE}/csfx-node-arm64-arm64.iso |" >> $GITHUB_STEP_SUMMARY
+          echo "| csfx-node-iso | amd64 | ${BASE}/csfx-node-iso-amd64.iso |" >> $GITHUB_STEP_SUMMARY
+          echo "| csfx-node-iso-arm64 | arm64 | ${BASE}/csfx-node-iso-arm64-arm64.iso |" >> $GITHUB_STEP_SUMMARY
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
