@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, serverToplevel, ... }:
 
 let
   cfg = config.services.csfx-installer;
@@ -61,14 +61,12 @@ let
     mkdir -p /mnt/boot
     mount "$PART_BOOT" /mnt/boot
 
-    echo "[INFO] running nixos-install flake=${cfg.flakeRef}"
+    echo "[INFO] installing system toplevel=${serverToplevel}"
 
     nixos-install \
       --no-root-passwd \
       --no-channel-copy \
-      --option experimental-features "nix-command flakes" \
-      --option allow-dirty true \
-      --flake "${cfg.flakeRef}"
+      --system "${serverToplevel}"
 
     echo "[INFO] installation complete, rebooting in 5s"
     sleep 5
@@ -78,11 +76,6 @@ in
 {
   options.services.csfx-installer = {
     enable = lib.mkEnableOption "CSFX automatic node installer";
-
-    flakeRef = lib.mkOption {
-      type = lib.types.str;
-      description = "Flake reference passed to nixos-install, e.g. /iso/csfx-flake#csfx-node";
-    };
 
     delaySeconds = lib.mkOption {
       type = lib.types.int;
@@ -97,6 +90,7 @@ in
       dosfstools
       e2fsprogs
       util-linux
+      nixos-install-tools
     ];
 
     systemd.services.csfx-autoinstall = {
@@ -105,7 +99,7 @@ in
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
 
-      path = with pkgs; [ parted dosfstools e2fsprogs util-linux systemd coreutils nixos-install-tools nix ];
+      path = with pkgs; [ parted dosfstools e2fsprogs util-linux systemd coreutils nixos-install-tools ];
 
       serviceConfig = {
         Type = "oneshot";
