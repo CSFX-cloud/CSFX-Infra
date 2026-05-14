@@ -65,6 +65,9 @@ let
 
     nixos-install \
       --no-root-passwd \
+      --no-channel-copy \
+      --option experimental-features "nix-command flakes" \
+      --option allow-dirty true \
       --flake "${cfg.flakeRef}"
 
     echo "[INFO] installation complete, rebooting in 5s"
@@ -102,7 +105,7 @@ in
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
 
-      path = with pkgs; [ parted dosfstools e2fsprogs util-linux systemd coreutils nixos-install-tools ];
+      path = with pkgs; [ parted dosfstools e2fsprogs util-linux systemd coreutils nixos-install-tools nix ];
 
       serviceConfig = {
         Type = "oneshot";
