@@ -26,7 +26,17 @@ let
       else
         ${pkgs.parted}/bin/parted -s "$DISK" mkpart primary ext4 -- -''${SIZE} 100%
       fi
+      ${pkgs.util-linux}/bin/partprobe "$DISK" 2>/dev/null || true
       ${pkgs.systemd}/bin/udevadm settle
+      WAIT=0
+      while [ ! -b "$PART" ] && [ "$WAIT" -lt 30 ]; do
+        sleep 1
+        WAIT=$((WAIT + 1))
+      done
+      if [ ! -b "$PART" ]; then
+        echo "[ERROR] partition node never appeared part=''${PART}"
+        exit 1
+      fi
       ${pkgs.e2fsprogs}/bin/mkfs.ext4 -L csfx-data "$PART"
       echo "[INFO] data partition created and formatted part=''${PART} size=''${SIZE}"
     fi
