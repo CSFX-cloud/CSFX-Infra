@@ -31,14 +31,14 @@ let
       PART_DATA="''${DISK}3"
     fi
 
-    ${pkgs.parted}/bin/parted "$DISK" -- mklabel gpt
-    ${pkgs.parted}/bin/parted "$DISK" -- mkpart ESP fat32 1MB 512MB
-    ${pkgs.parted}/bin/parted "$DISK" -- mkpart primary ext4 512MB 20GB
-    ${pkgs.parted}/bin/parted "$DISK" -- mkpart primary ext4 20GB 100%
-    ${pkgs.parted}/bin/parted "$DISK" -- set 1 esp on
+    parted "$DISK" -- mklabel gpt
+    parted "$DISK" -- mkpart ESP fat32 1MB 512MB
+    parted "$DISK" -- mkpart primary ext4 512MB 20GB
+    parted "$DISK" -- mkpart primary ext4 20GB 100%
+    parted "$DISK" -- set 1 esp on
 
-    ${pkgs.util-linux}/bin/partprobe "$DISK"
-    ${pkgs.systemd}/bin/udevadm settle --timeout=15
+    partprobe "$DISK"
+    udevadm settle --timeout=15
 
     WAIT=0
     while [ ! -b "$PART_DATA" ] && [ "$WAIT" -lt 30 ]; do
@@ -51,15 +51,15 @@ let
       exit 1
     fi
 
-    ${pkgs.dosfstools}/bin/mkfs.fat -F 32 -n boot "$PART_BOOT"
-    ${pkgs.e2fsprogs}/bin/mkfs.ext4 -L nixos "$PART_ROOT"
-    ${pkgs.e2fsprogs}/bin/mkfs.ext4 -L csfx-data "$PART_DATA"
+    mkfs.fat -F 32 -n boot "$PART_BOOT"
+    mkfs.ext4 -L nixos "$PART_ROOT"
+    mkfs.ext4 -L csfx-data "$PART_DATA"
 
     echo "[INFO] partitioning complete boot=$PART_BOOT root=$PART_ROOT data=$PART_DATA"
 
-    ${pkgs.util-linux}/bin/mount "$PART_ROOT" /mnt
+    mount "$PART_ROOT" /mnt
     mkdir -p /mnt/boot
-    ${pkgs.util-linux}/bin/mount "$PART_BOOT" /mnt/boot
+    mount "$PART_BOOT" /mnt/boot
 
     echo "[INFO] running nixos-install flake=${cfg.flakeRef}"
 
@@ -89,11 +89,21 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    environment.systemPackages = with pkgs; [
+      parted
+      dosfstools
+      e2fsprogs
+      util-linux
+    ];
+
     systemd.services.csfx-autoinstall = {
       description = "CSFX automatic node installer";
       after = [ "network-online.target" "getty.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
+
+      path = with pkgs; [ parted dosfstools e2fsprogs util-linux systemd coreutils ];
+
       serviceConfig = {
         Type = "oneshot";
         ExecStartPre = "${pkgs.coreutils}/bin/sleep ${toString cfg.delaySeconds}";
