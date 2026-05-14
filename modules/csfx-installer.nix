@@ -102,7 +102,7 @@ in
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
 
-      path = with pkgs; [ parted dosfstools e2fsprogs util-linux systemd coreutils ];
+      path = with pkgs; [ parted dosfstools e2fsprogs util-linux systemd coreutils nixos-install-tools ];
 
       serviceConfig = {
         Type = "oneshot";
