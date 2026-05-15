@@ -99,6 +99,16 @@ let
       --no-channel-copy \
       --root /mnt
 
+    if [ "$EFI" = "0" ]; then
+      echo "[INFO] BIOS mode: embedding GRUB i386-pc disk=$DISK"
+      ${pkgs.grub2}/bin/grub-install \
+        --boot-directory=/mnt/boot \
+        --target=i386-pc \
+        --directory="${pkgs.grub2}/lib/grub/i386-pc" \
+        --recheck \
+        "$DISK"
+    fi
+
     echo "[INFO] verifying install"
     ${pkgs.util-linux}/bin/lsblk -o NAME,LABEL,FSTYPE,SIZE,MOUNTPOINT
     ls /mnt/boot/grub/ 2>/dev/null && echo "[INFO] grub dir exists" || echo "[WARN] grub dir missing"
