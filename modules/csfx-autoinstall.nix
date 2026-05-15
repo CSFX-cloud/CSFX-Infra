@@ -9,7 +9,6 @@ let
   mkfsVfat = "${pkgs.dosfstools}/bin/mkfs.vfat";
   mkfsExt4 = "${pkgs.e2fsprogs}/bin/mkfs.ext4";
   nixosInstall = "${pkgs.nixos-install-tools}/bin/nixos-install";
-  grubInstall = "${pkgs.grub2}/bin/grub-install";
   mount = "${pkgs.util-linux}/bin/mount";
   mkdir = "${pkgs.coreutils}/bin/mkdir";
   sleep = "${pkgs.coreutils}/bin/sleep";
@@ -98,33 +97,7 @@ let
       --system "$TOPLEVEL" \
       --no-root-password \
       --no-channel-copy \
-      --no-bootloader \
       --root /mnt
-
-    if [ "''${EFI}" = "1" ]; then
-      echo "[INFO] installing GRUB EFI target=x86_64-efi"
-      ${grubInstall} \
-        --boot-directory=/mnt/boot \
-        --efi-directory=/mnt/boot \
-        --target=x86_64-efi \
-        --directory="${pkgs.grub2_efi}/lib/grub/x86_64-efi" \
-        --removable \
-        --recheck \
-        "$DISK"
-    else
-      echo "[INFO] installing GRUB BIOS target=i386-pc"
-      ${grubInstall} \
-        --boot-directory=/mnt/boot \
-        --target=i386-pc \
-        --directory="${pkgs.grub2}/lib/grub/i386-pc" \
-        --recheck \
-        "$DISK"
-    fi
-
-    echo "[INFO] generating grub config"
-    ${pkgs.nixos-install-tools}/bin/nixos-enter \
-      --root /mnt -- \
-      "''${TOPLEVEL}/bin/switch-to-configuration" boot
 
     echo "[INFO] verifying install"
     ${pkgs.util-linux}/bin/lsblk -o NAME,LABEL,FSTYPE,SIZE,MOUNTPOINT
@@ -164,7 +137,6 @@ in
           "${pkgs.e2fsprogs}/bin"
           "${pkgs.systemd}/bin"
           "${pkgs.grub2}/bin"
-          "${pkgs.grub2_efi}/bin"
           "${pkgs.nixos-install-tools}/bin"
         ]);
       };

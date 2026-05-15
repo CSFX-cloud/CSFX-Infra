@@ -38,7 +38,7 @@
         boot.loader.grub.enable = true;
         boot.loader.grub.efiSupport = true;
         boot.loader.grub.efiInstallAsRemovable = true;
-        boot.loader.grub.device = "nodev";
+        boot.loader.grub.devices = [ "/dev/sda" "/dev/vda" ];
         boot.loader.grub.useOSProber = false;
         boot.loader.efi.efiSysMountPoint = "/boot";
 
