@@ -32,11 +32,15 @@
         system.stateVersion = "24.11";
 
         fileSystems."/" = { device = "/dev/disk/by-label/nixos"; fsType = "ext4"; };
-        fileSystems."/boot" = { device = "/dev/disk/by-label/boot"; fsType = "vfat"; };
+        fileSystems."/boot" = { device = "/dev/disk/by-label/boot"; fsType = "vfat"; options = [ "umask=0077" ]; };
         swapDevices = [ ];
 
-        boot.loader.systemd-boot.enable = true;
-        boot.loader.efi.canTouchEfiVariables = true;
+        boot.loader.grub.enable = true;
+        boot.loader.grub.efiSupport = true;
+        boot.loader.grub.efiInstallAsRemovable = true;
+        boot.loader.grub.device = "nodev";
+        boot.loader.grub.useOSProber = false;
+        boot.loader.efi.efiSysMountPoint = "/boot";
 
         services.csfx-agent.enable = true;
         services.csfx-agent.gatewayUrl = "http://localhost:8000";
@@ -47,7 +51,7 @@
         services.csfx-cp.updater.infraRepoGithub = "CSFX-cloud/CSFX-Infra";
         services.csfx-cp.updater.infraRepoBranch = "main";
         services.csfx-setup.enable = true;
-        services.csfx-setup.dataPart = "/dev/sda3";
+        services.csfx-setup.dataPart = "/dev/sda4";
         services.csfx-binary-cache.enable = true;
         services.csfx-update-units.enable = true;
         services.csfx-update-units.nixCacheUrl = "http://localhost:5000";

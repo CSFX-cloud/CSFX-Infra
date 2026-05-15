@@ -19,38 +19,46 @@ let
     DISK="${cfg.disk}"
     TOPLEVEL="${installedSystem.config.system.build.toplevel}"
 
-    echo "[INFO] starting autoinstall disk=''${DISK}"
+    if [ -d /sys/firmware/efi/efivars ]; then
+      EFI=1
+    else
+      EFI=0
+    fi
+
+    echo "[INFO] starting autoinstall disk=''${DISK} efi=''${EFI}"
 
     ${parted} -s "$DISK" mklabel gpt
-    ${parted} -s "$DISK" mkpart ESP fat32 1MiB 512MiB
-    ${parted} -s "$DISK" set 1 esp on
-    ${parted} -s "$DISK" mkpart primary ext4 512MiB 20GiB
+    ${parted} -s "$DISK" mkpart bios-boot 1MiB 2MiB
+    ${parted} -s "$DISK" set 1 bios_grub on
+    ${parted} -s "$DISK" mkpart ESP fat32 2MiB 514MiB
+    ${parted} -s "$DISK" set 2 esp on
+    ${parted} -s "$DISK" mkpart primary ext4 514MiB 20GiB
     ${parted} -s "$DISK" mkpart primary ext4 20GiB 100%
 
     ${partprobe} "$DISK"
     ${udevadm} settle --timeout=10
 
     WAIT=0
-    while [ ! -b "''${DISK}3" ] && [ "$WAIT" -lt 30 ]; do
+    while [ ! -b "''${DISK}4" ] && [ "$WAIT" -lt 30 ]; do
       ${sleep} 1
       WAIT=$((WAIT + 1))
     done
 
-    if [ ! -b "''${DISK}3" ]; then
+    if [ ! -b "''${DISK}4" ]; then
       echo "[ERROR] partition nodes did not appear disk=''${DISK}"
       exit 1
     fi
 
-    ${mkfsVfat} -n boot "''${DISK}1"
-    ${mkfsExt4} -L nixos "''${DISK}2"
-    ${mkfsExt4} -L csfx-data "''${DISK}3"
+    ${mkfsVfat} -n boot "''${DISK}2"
+    ${mkfsExt4} -L nixos "''${DISK}3"
+    ${mkfsExt4} -L csfx-data "''${DISK}4"
 
     echo "[INFO] partitions formatted disk=''${DISK}"
 
     ${mkdir} -p /mnt
-    ${mount} "''${DISK}2" /mnt
+    ${mount} "''${DISK}3" /mnt
     ${mkdir} -p /mnt/boot
-    ${mount} "''${DISK}1" /mnt/boot
+    ${mount} "''${DISK}2" /mnt/boot
 
     echo "[INFO] mounts ready target=/mnt"
 
