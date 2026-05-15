@@ -25,13 +25,14 @@ let
         if [ ! -b "$candidate" ]; then
           continue
         fi
-        REMOVABLE="/sys/block/$(${pkgs.coreutils}/bin/basename $candidate)/removable"
-        if [ -f "$REMOVABLE" ] && [ "$(cat $REMOVABLE)" = "1" ]; then
+        DEVNAME="$(${pkgs.coreutils}/bin/basename "$candidate")"
+        REMOVABLE="/sys/block/''${DEVNAME}/removable"
+        if [ -f "$REMOVABLE" ] && [ "$(cat "$REMOVABLE")" = "1" ]; then
           echo "[INFO] skipping removable device=$candidate"
           continue
         fi
-        CDROM="/sys/block/$(${pkgs.coreutils}/bin/basename $candidate)/device/type"
-        if [ -f "$CDROM" ] && [ "$(cat $CDROM)" = "5" ]; then
+        CDROM="/sys/block/''${DEVNAME}/device/type"
+        if [ -f "$CDROM" ] && [ "$(cat "$CDROM")" = "5" ]; then
           echo "[INFO] skipping cdrom device=$candidate"
           continue
         fi
@@ -106,6 +107,7 @@ let
         --boot-directory=/mnt/boot \
         --efi-directory=/mnt/boot \
         --target=x86_64-efi \
+        --directory="${pkgs.grub2_efi}/lib/grub/x86_64-efi" \
         --removable \
         --recheck \
         "$DISK"
@@ -114,14 +116,21 @@ let
       ${grubInstall} \
         --boot-directory=/mnt/boot \
         --target=i386-pc \
+        --directory="${pkgs.grub2}/lib/grub/i386-pc" \
         --recheck \
         "$DISK"
     fi
 
+    echo "[INFO] linking system profile"
+    ${pkgs.nix}/bin/nix-env \
+      --store /mnt \
+      -p /mnt/nix/var/nix/profiles/system \
+      --set "''${TOPLEVEL}"
+
     echo "[INFO] generating grub config"
     ${pkgs.nixos-install-tools}/bin/nixos-enter \
       --root /mnt -- \
-      "''${TOPLEVEL}/bin/switch-to-configuration" boot
+      /run/current-system/sw/bin/switch-to-configuration boot
 
     echo "[INFO] verifying install"
     ${pkgs.util-linux}/bin/lsblk -o NAME,LABEL,FSTYPE,SIZE,MOUNTPOINT
@@ -161,6 +170,7 @@ in
           "${pkgs.e2fsprogs}/bin"
           "${pkgs.systemd}/bin"
           "${pkgs.grub2}/bin"
+          "${pkgs.grub2_efi}/bin"
           "${pkgs.nixos-install-tools}/bin"
         ]);
       };
