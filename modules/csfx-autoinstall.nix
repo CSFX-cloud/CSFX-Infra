@@ -110,7 +110,7 @@ let
     echo "[INFO] generating grub config"
     ${pkgs.nixos-install-tools}/bin/nixos-enter \
       --root /mnt -- \
-      /run/current-system/bin/switch-to-configuration boot
+      "''${TOPLEVEL}/bin/switch-to-configuration" boot
 
     echo "[INFO] install complete rebooting"
     ${sleep} 2
