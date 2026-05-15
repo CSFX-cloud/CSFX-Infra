@@ -21,11 +21,22 @@ let
     TOPLEVEL="${installedSystem.config.system.build.toplevel}"
 
     if [ "$DISK" = "auto" ]; then
-      for candidate in /dev/sda /dev/vda /dev/nvme0n1 /dev/xvda; do
-        if [ -b "$candidate" ]; then
-          DISK="$candidate"
-          break
+      for candidate in /dev/vda /dev/sda /dev/sdb /dev/nvme0n1 /dev/xvda; do
+        if [ ! -b "$candidate" ]; then
+          continue
         fi
+        REMOVABLE="/sys/block/$(${pkgs.coreutils}/bin/basename $candidate)/removable"
+        if [ -f "$REMOVABLE" ] && [ "$(cat $REMOVABLE)" = "1" ]; then
+          echo "[INFO] skipping removable device=$candidate"
+          continue
+        fi
+        CDROM="/sys/block/$(${pkgs.coreutils}/bin/basename $candidate)/device/type"
+        if [ -f "$CDROM" ] && [ "$(cat $CDROM)" = "5" ]; then
+          echo "[INFO] skipping cdrom device=$candidate"
+          continue
+        fi
+        DISK="$candidate"
+        break
       done
       if [ "$DISK" = "auto" ]; then
         echo "[ERROR] no target disk found"
@@ -112,8 +123,13 @@ let
       --root /mnt -- \
       "''${TOPLEVEL}/bin/switch-to-configuration" boot
 
+    echo "[INFO] verifying install"
+    ${pkgs.util-linux}/bin/lsblk -o NAME,LABEL,FSTYPE,SIZE,MOUNTPOINT
+    ls /mnt/boot/grub/ 2>/dev/null && echo "[INFO] grub dir exists" || echo "[WARN] grub dir missing"
+    ls /mnt/boot/grub/grub.cfg 2>/dev/null && echo "[INFO] grub.cfg exists" || echo "[WARN] grub.cfg missing"
+
     echo "[INFO] install complete rebooting"
-    ${sleep} 2
+    ${sleep} 30
     ${pkgs.systemd}/bin/systemctl reboot
   '';
 in
