@@ -20,6 +20,20 @@ let
     DISK="${cfg.disk}"
     TOPLEVEL="${installedSystem.config.system.build.toplevel}"
 
+    if [ "$DISK" = "auto" ]; then
+      for candidate in /dev/sda /dev/vda /dev/nvme0n1 /dev/xvda; do
+        if [ -b "$candidate" ]; then
+          DISK="$candidate"
+          break
+        fi
+      done
+      if [ "$DISK" = "auto" ]; then
+        echo "[ERROR] no target disk found"
+        exit 1
+      fi
+      echo "[INFO] auto-detected disk=''${DISK}"
+    fi
+
     if [ -d /sys/firmware/efi/efivars ]; then
       EFI=1
     else
@@ -39,27 +53,32 @@ let
     ${partprobe} "$DISK"
     ${udevadm} settle --timeout=10
 
+    case "$DISK" in
+      /dev/nvme*|/dev/mmcblk*) PART="''${DISK}p" ;;
+      *) PART="$DISK" ;;
+    esac
+
     WAIT=0
-    while [ ! -b "''${DISK}4" ] && [ "$WAIT" -lt 30 ]; do
+    while [ ! -b "''${PART}4" ] && [ "$WAIT" -lt 30 ]; do
       ${sleep} 1
       WAIT=$((WAIT + 1))
     done
 
-    if [ ! -b "''${DISK}4" ]; then
+    if [ ! -b "''${PART}4" ]; then
       echo "[ERROR] partition nodes did not appear disk=''${DISK}"
       exit 1
     fi
 
-    ${mkfsVfat} -n boot "''${DISK}2"
-    ${mkfsExt4} -L nixos "''${DISK}3"
-    ${mkfsExt4} -L csfx-data "''${DISK}4"
+    ${mkfsVfat} -n boot "''${PART}2"
+    ${mkfsExt4} -L nixos "''${PART}3"
+    ${mkfsExt4} -L csfx-data "''${PART}4"
 
     echo "[INFO] partitions formatted disk=''${DISK}"
 
     ${mkdir} -p /mnt
-    ${mount} "''${DISK}3" /mnt
+    ${mount} "''${PART}3" /mnt
     ${mkdir} -p /mnt/boot
-    ${mount} "''${DISK}2" /mnt/boot
+    ${mount} "''${PART}2" /mnt/boot
 
     echo "[INFO] mounts ready target=/mnt"
 

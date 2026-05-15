@@ -51,7 +51,7 @@
         services.csfx-cp.updater.infraRepoGithub = "CSFX-cloud/CSFX-Infra";
         services.csfx-cp.updater.infraRepoBranch = "main";
         services.csfx-setup.enable = true;
-        services.csfx-setup.dataPart = "/dev/sda4";
+        services.csfx-setup.dataPart = "/dev/disk/by-label/csfx-data";
         services.csfx-binary-cache.enable = true;
         services.csfx-update-units.enable = true;
         services.csfx-update-units.nixCacheUrl = "http://localhost:5000";
@@ -62,7 +62,7 @@
       isoConfig = installedSys: isoFileName: { lib, ... }: {
         system.stateVersion = "24.11";
         services.csfx-autoinstall.enable = true;
-        services.csfx-autoinstall.disk = "/dev/sda";
+        services.csfx-autoinstall.disk = "auto";
         image.fileName = lib.mkForce isoFileName;
       };
     in
