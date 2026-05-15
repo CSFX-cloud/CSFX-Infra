@@ -83,6 +83,19 @@ in
       after = [ "network.target" "local-fs.target" ];
       conflicts = [ "shutdown.target" ];
 
+      environment = {
+        PATH = lib.mkForce (lib.concatStringsSep ":" [
+          "${pkgs.nix}/bin"
+          "${pkgs.coreutils}/bin"
+          "${pkgs.util-linux}/bin"
+          "${pkgs.parted}/bin"
+          "${pkgs.dosfstools}/bin"
+          "${pkgs.e2fsprogs}/bin"
+          "${pkgs.systemd}/bin"
+          "${pkgs.nixos-install-tools}/bin"
+        ]);
+      };
+
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
