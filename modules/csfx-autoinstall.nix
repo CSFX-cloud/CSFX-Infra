@@ -9,6 +9,9 @@ let
   mkfsVfat = "${pkgs.dosfstools}/bin/mkfs.vfat";
   mkfsExt4 = "${pkgs.e2fsprogs}/bin/mkfs.ext4";
   nixosInstall = "${pkgs.nixos-install-tools}/bin/nixos-install";
+  mount = "${pkgs.util-linux}/bin/mount";
+  mkdir = "${pkgs.coreutils}/bin/mkdir";
+  sleep = "${pkgs.coreutils}/bin/sleep";
 
   installScript = pkgs.writeShellScript "csfx-autoinstall" ''
     set -euo pipefail
@@ -29,7 +32,7 @@ let
 
     WAIT=0
     while [ ! -b "''${DISK}3" ] && [ "$WAIT" -lt 30 ]; do
-      sleep 1
+      ${sleep} 1
       WAIT=$((WAIT + 1))
     done
 
@@ -44,10 +47,10 @@ let
 
     echo "[INFO] partitions formatted disk=''${DISK}"
 
-    mkdir -p /mnt
-    mount "''${DISK}2" /mnt
-    mkdir -p /mnt/boot
-    mount "''${DISK}1" /mnt/boot
+    ${mkdir} -p /mnt
+    ${mount} "''${DISK}2" /mnt
+    ${mkdir} -p /mnt/boot
+    ${mount} "''${DISK}1" /mnt/boot
 
     echo "[INFO] mounts ready target=/mnt"
 
@@ -58,7 +61,7 @@ let
       --root /mnt
 
     echo "[INFO] install complete rebooting"
-    sleep 2
+    ${sleep} 2
     ${pkgs.systemd}/bin/systemctl reboot
   '';
 in
