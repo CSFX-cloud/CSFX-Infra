@@ -121,16 +121,10 @@ let
         "$DISK"
     fi
 
-    echo "[INFO] linking system profile"
-    ${pkgs.nix}/bin/nix-env \
-      --store /mnt \
-      -p /mnt/nix/var/nix/profiles/system \
-      --set "''${TOPLEVEL}"
-
     echo "[INFO] generating grub config"
     ${pkgs.nixos-install-tools}/bin/nixos-enter \
       --root /mnt -- \
-      /run/current-system/sw/bin/switch-to-configuration boot
+      "''${TOPLEVEL}/bin/switch-to-configuration" boot
 
     echo "[INFO] verifying install"
     ${pkgs.util-linux}/bin/lsblk -o NAME,LABEL,FSTYPE,SIZE,MOUNTPOINT
