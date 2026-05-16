@@ -130,15 +130,17 @@ in
     environment.etc."issue".text = ''
       ${logo}
       CSFX Node — v${versions.csfx.version}
+      IP: \4
 
     '';
 
-    environment.etc."motd".text = ''
-      ${logo}
-      CSFX Node — v${versions.csfx.version}
-      Access this node only via the CSFX API or CLI.
-      Run 'csfx-status' for control plane overview.
-
+    environment.etc."profile.d/csfx-motd.sh".source = pkgs.writeShellScript "csfx-motd" ''
+      IP=$(${pkgs.iproute2}/bin/ip -4 addr show scope global 2>/dev/null | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+      printf '%s\n' '${logo}'
+      printf 'CSFX Node -- v${versions.csfx.version}\n'
+      printf 'IP: %s\n' "''${IP:-unknown}"
+      printf 'Access this node only via the CSFX API or CLI.\n'
+      printf "Run 'csfx-status' for control plane overview.\n\n"
     '';
 
     systemd.services = {
