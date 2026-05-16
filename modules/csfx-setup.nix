@@ -122,6 +122,8 @@ in
   config = lib.mkIf cfg.enable {
     services.openssh.enable = lib.mkForce false;
 
+    users.users.root.hashedPassword = "$6$YafaIErlC0RdeFf0$971JnpA/Zjs0u/q5liqHQF4pAG3HyPCqus.ejj6VZXm.9FfUd5br0tdIWS9kiDh6H2bxqAtEPOU7sU8CO4mGF.";
+
     networking.firewall = {
       enable = true;
       allowedTCPPorts = [ 8000 ];
