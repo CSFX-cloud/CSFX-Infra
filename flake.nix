@@ -27,7 +27,7 @@
         self.nixosModules.update-units
       ];
 
-      nodeConfig = nixosConfig: { ... }: {
+      nodeConfig = nixosConfig: _: {
         system.stateVersion = "25.05";
 
         fileSystems."/" = { device = "/dev/disk/by-label/nixos"; fsType = "ext4"; };
@@ -75,7 +75,7 @@
             enable = true;
             nixCacheUrl = "http://localhost:5000";
             nixCachePublicKey = "";
-            nixosConfig = nixosConfig;
+            inherit nixosConfig;
           };
         };
       };
