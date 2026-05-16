@@ -29,11 +29,16 @@
       ];
 
       nodeConfig = nixosConfig: { lib, ... }: {
-        system.stateVersion = "24.11";
+        system.stateVersion = "25.05";
 
         fileSystems."/" = { device = "/dev/disk/by-label/nixos"; fsType = "ext4"; };
         fileSystems."/boot" = { device = "/dev/disk/by-label/boot"; fsType = "vfat"; options = [ "umask=0077" ]; };
         swapDevices = [ ];
+
+        boot.initrd.availableKernelModules = [
+          "virtio_pci" "virtio_blk" "virtio_net" "virtio_scsi"
+          "ahci" "sd_mod" "xhci_pci" "usb_storage" "nvme"
+        ];
 
         boot.loader.grub.enable = true;
         boot.loader.grub.efiSupport = true;
@@ -60,7 +65,7 @@
       };
 
       isoConfig = installedSys: isoFileName: { lib, ... }: {
-        system.stateVersion = "24.11";
+        system.stateVersion = "25.05";
         services.csfx-autoinstall.enable = true;
         services.csfx-autoinstall.disk = "auto";
         image.fileName = lib.mkForce isoFileName;

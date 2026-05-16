@@ -20,7 +20,7 @@ let
     TOPLEVEL="${installedSystem.config.system.build.toplevel}"
 
     if [ "$DISK" = "auto" ]; then
-      for candidate in /dev/vda /dev/sda /dev/sdb /dev/nvme0n1 /dev/xvda; do
+      for candidate in /dev/vda /dev/nvme0n1 /dev/sda /dev/sdb /dev/xvda; do
         if [ ! -b "$candidate" ]; then
           continue
         fi
@@ -62,7 +62,7 @@ let
     ${parted} -s "$DISK" mkpart primary ext4 20GiB 100%
 
     ${partprobe} "$DISK"
-    ${udevadm} settle --timeout=10
+    ${udevadm} settle --timeout=15
 
     case "$DISK" in
       /dev/nvme*|/dev/mmcblk*) PART="''${DISK}p" ;;
@@ -84,6 +84,8 @@ let
     ${mkfsExt4} -L nixos "''${PART}3"
     ${mkfsExt4} -L csfx-data "''${PART}4"
 
+    ${udevadm} settle --timeout=10
+
     echo "[INFO] partitions formatted disk=''${DISK}"
 
     ${mkdir} -p /mnt
@@ -93,6 +95,16 @@ let
 
     echo "[INFO] mounts ready target=/mnt"
 
+    if [ "$EFI" = "0" ]; then
+      echo "[INFO] BIOS mode: embedding GRUB i386-pc before nixos-install disk=''${DISK}"
+      ${pkgs.grub2}/bin/grub-install \
+        --boot-directory=/mnt/boot \
+        --target=i386-pc \
+        --directory="${pkgs.grub2}/lib/grub/i386-pc" \
+        --recheck \
+        "$DISK"
+    fi
+
     ${nixosInstall} \
       --system "$TOPLEVEL" \
       --no-root-password \
@@ -100,7 +112,7 @@ let
       --root /mnt
 
     if [ "$EFI" = "0" ]; then
-      echo "[INFO] BIOS mode: embedding GRUB i386-pc disk=$DISK"
+      echo "[INFO] BIOS mode: re-embedding GRUB after nixos-install disk=''${DISK}"
       ${pkgs.grub2}/bin/grub-install \
         --boot-directory=/mnt/boot \
         --target=i386-pc \
@@ -115,7 +127,7 @@ let
     ls /mnt/boot/grub/grub.cfg 2>/dev/null && echo "[INFO] grub.cfg exists" || echo "[WARN] grub.cfg missing"
 
     echo "[INFO] install complete rebooting"
-    ${sleep} 30
+    ${sleep} 5
     ${pkgs.systemd}/bin/systemctl reboot
   '';
 in
