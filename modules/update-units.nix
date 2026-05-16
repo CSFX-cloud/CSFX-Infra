@@ -51,77 +51,80 @@ in
       })
     ];
 
-    systemd.services.csfx-node-updater = {
-      description = "CSFX Node Updater — nixos-rebuild switch on new flake rev";
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      onSuccess = [ "csfx-watchdog.timer" ];
+    systemd = {
+      services = {
+        csfx-node-updater = {
+          description = "CSFX Node Updater — nixos-rebuild switch on new flake rev";
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          onSuccess = [ "csfx-watchdog.timer" ];
+          serviceConfig = {
+            Type = "oneshot";
+            User = "root";
+            ExecStart = pkgs.writeShellScript "csfx-node-updater" ''
+              set -euo pipefail
 
-      serviceConfig = {
-        Type = "oneshot";
-        User = "root";
-        ExecStart = pkgs.writeShellScript "csfx-node-updater" ''
-          set -euo pipefail
+              TRIGGER_FILE="/var/lib/csfx/update_trigger"
+              MIRROR_DIR="${cfg.infraRepoMirrorDir}"
+              CONFIG="${cfg.nixosConfig}"
 
-          TRIGGER_FILE="/var/lib/csfx/update_trigger"
-          MIRROR_DIR="${cfg.infraRepoMirrorDir}"
-          CONFIG="${cfg.nixosConfig}"
+              REV=$(cat "$TRIGGER_FILE" | tr -d '[:space:]')
 
-          REV=$(cat "$TRIGGER_FILE" | tr -d '[:space:]')
+              if ! echo "$REV" | grep -qE '^[0-9a-f]{40}$'; then
+                echo "invalid rev: $REV" >&2
+                exit 1
+              fi
 
-          if ! echo "$REV" | grep -qE '^[0-9a-f]{40}$'; then
-            echo "invalid rev: $REV" >&2
-            exit 1
-          fi
+              FLAKE_URL="git+file://${"\${MIRROR_DIR}"}?rev=${"\${REV}"}"
 
-          FLAKE_URL="git+file://${"\${MIRROR_DIR}"}?rev=${"\${REV}"}"
+              nixos-rebuild switch --flake "$FLAKE_URL#$CONFIG"
+            '';
+          };
+        };
 
-          nixos-rebuild switch --flake "$FLAKE_URL#$CONFIG"
-        '';
+        csfx-watchdog = {
+          description = "CSFX update watchdog — rollback if heartbeats missing";
+          serviceConfig = {
+            Type = "oneshot";
+            User = "root";
+            ExecStart = pkgs.writeShellScript "csfx-watchdog" ''
+              set -euo pipefail
+
+              COUNTER_FILE="/var/lib/csfx/post_update_heartbeats"
+              REQUIRED=${toString cfg.watchdogHeartbeats}
+
+              if [ ! -f "$COUNTER_FILE" ]; then
+                echo "no heartbeat counter found, triggering rollback" >&2
+                nixos-rebuild switch --rollback
+                exit 0
+              fi
+
+              COUNT=$(cat "$COUNTER_FILE" | tr -d '[:space:]')
+
+              if [ "$COUNT" -lt "$REQUIRED" ] 2>/dev/null; then
+                echo "only $COUNT/$REQUIRED heartbeats received, triggering rollback" >&2
+                nixos-rebuild switch --rollback
+              fi
+            '';
+          };
+        };
       };
-    };
 
-    systemd.paths.csfx-update-trigger = {
-      description = "Watch for CSFX update trigger file";
-      wantedBy = [ "multi-user.target" ];
-      pathConfig = {
-        PathModified = "/var/lib/csfx/update_trigger";
-        Unit = "csfx-node-updater.service";
+      paths.csfx-update-trigger = {
+        description = "Watch for CSFX update trigger file";
+        wantedBy = [ "multi-user.target" ];
+        pathConfig = {
+          PathModified = "/var/lib/csfx/update_trigger";
+          Unit = "csfx-node-updater.service";
+        };
       };
-    };
 
-    systemd.timers.csfx-watchdog = {
-      description = "CSFX update watchdog timer";
-      timerConfig = {
-        OnActiveSec = "${toString cfg.watchdogTimeoutSecs}s";
-        RemainAfterElapse = false;
-      };
-    };
-
-    systemd.services.csfx-watchdog = {
-      description = "CSFX update watchdog — rollback if heartbeats missing";
-      serviceConfig = {
-        Type = "oneshot";
-        User = "root";
-        ExecStart = pkgs.writeShellScript "csfx-watchdog" ''
-          set -euo pipefail
-
-          COUNTER_FILE="/var/lib/csfx/post_update_heartbeats"
-          REQUIRED=${toString cfg.watchdogHeartbeats}
-
-          if [ ! -f "$COUNTER_FILE" ]; then
-            echo "no heartbeat counter found, triggering rollback" >&2
-            nixos-rebuild switch --rollback
-            exit 0
-          fi
-
-          COUNT=$(cat "$COUNTER_FILE" | tr -d '[:space:]')
-
-          if [ "$COUNT" -lt "$REQUIRED" ] 2>/dev/null; then
-            echo "only $COUNT/$REQUIRED heartbeats received, triggering rollback" >&2
-            nixos-rebuild switch --rollback
-          fi
-        '';
+      timers.csfx-watchdog = {
+        description = "CSFX update watchdog timer";
+        timerConfig = {
+          OnActiveSec = "${toString cfg.watchdogTimeoutSecs}s";
+          RemainAfterElapse = false;
+        };
       };
     };
   };

@@ -10,10 +10,9 @@ let
   mkBin = name: entry:
     pkgs.stdenv.mkDerivation {
       pname = name;
-      version = v.version;
+      inherit (v) version;
       src = pkgs.fetchurl {
-        url = entry.${arch}.url;
-        sha256 = entry.${arch}.sha256;
+        inherit (entry.${arch}) url sha256;
       };
       dontUnpack = true;
       installPhase = ''
@@ -186,209 +185,212 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    services.patroni = {
-      enable           = true;
-      scope            = "csfx";
-      name             = config.networking.hostName;
-      nodeIp           = "127.0.0.1";
-      postgresqlPackage = pkgs.postgresql_16;
+    services = {
+      patroni = {
+        enable = true;
+        scope = "csfx";
+        name = config.networking.hostName;
+        nodeIp = "127.0.0.1";
+        postgresqlPackage = pkgs.postgresql_16;
 
-      settings = {
-        etcd3.hosts = [ "127.0.0.1:2379" ];
-        bootstrap = {
-          dcs = {
-            ttl                     = 30;
-            loop_wait               = 10;
-            retry_timeout           = 10;
-            maximum_lag_on_failover = 1048576;
+        settings = {
+          etcd3.hosts = [ "127.0.0.1:2379" ];
+          bootstrap = {
+            dcs = {
+              ttl = 30;
+              loop_wait = 10;
+              retry_timeout = 10;
+              maximum_lag_on_failover = 1048576;
+            };
+            initdb = [
+              { encoding = "UTF8"; }
+              "data-checksums"
+            ];
+            pg_hba = [
+              "local all all trust"
+              "host replication replicator 127.0.0.1/32 md5"
+              "host all all 127.0.0.1/32 md5"
+            ];
           };
-          initdb = [
-            { encoding = "UTF8"; }
-            "data-checksums"
-          ];
-          pg_hba = [
-            "local all all trust"
-            "host replication replicator 127.0.0.1/32 md5"
-            "host all all 127.0.0.1/32 md5"
-          ];
+          postgresql.authentication = {
+            replication.username = "replicator";
+            superuser.username = "postgres";
+          };
         };
-        postgresql.authentication = {
-          replication.username = "replicator";
-          superuser.username   = "postgres";
+
+        environmentFiles = {
+          PATRONI_SUPERUSER_PASSWORD = "/etc/csfx/patroni-superuser-password";
+          PATRONI_REPLICATION_PASSWORD = "/etc/csfx/patroni-replication-password";
         };
       };
 
-      environmentFiles = {
-        PATRONI_SUPERUSER_PASSWORD    = "/etc/csfx/patroni-superuser-password";
-        PATRONI_REPLICATION_PASSWORD  = "/etc/csfx/patroni-replication-password";
+      etcd = {
+        enable = true;
+        listenClientUrls = [ "http://127.0.0.1:2379" ];
+        advertiseClientUrls = [ "http://127.0.0.1:2379" ];
       };
     };
 
-    systemd.services.patroni = {
-      after  = [ "etcd.service" "network-online.target" ];
-      wants  = [ "network-online.target" ];
-      requires = [ "etcd.service" ];
-    };
+    systemd = {
+      services = {
+        patroni = {
+          after = [ "etcd.service" "network-online.target" ];
+          wants = [ "network-online.target" ];
+          requires = [ "etcd.service" ];
+        };
 
-    services.etcd = {
-      enable       = true;
-      listenClientUrls  = [ "http://127.0.0.1:2379" ];
-      advertiseClientUrls = [ "http://127.0.0.1:2379" ];
-    };
+        csfx-db-init = {
+          description = "CSFX database user and schema init";
+          after = [ "network.target" "patroni.service" ];
+          requires = [ "patroni.service" ];
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            User = "root";
+            EnvironmentFile = cfg.envFile;
+            ExecStart = pkgs.writeShellScript "csfx-db-init" ''
+              set -euo pipefail
 
-    systemd.services.csfx-db-init = {
-      description = "CSFX database user and schema init";
-      after    = [ "network.target" "patroni.service" ];
-      requires = [ "patroni.service" ];
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        Type            = "oneshot";
-        RemainAfterExit = true;
-        User            = "root";
-        EnvironmentFile = cfg.envFile;
-        ExecStart       = pkgs.writeShellScript "csfx-db-init" ''
-          set -euo pipefail
+              PSQL="${pkgs.postgresql_16}/bin/psql"
+              TIMEOUT=60
+              ELAPSED=0
 
-          PSQL="${pkgs.postgresql_16}/bin/psql"
-          TIMEOUT=60
-          ELAPSED=0
+              while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+                if "$PSQL" -U postgres -h 127.0.0.1 -c "SELECT 1" postgres > /dev/null 2>&1; then
+                  break
+                fi
+                sleep 2
+                ELAPSED=$((ELAPSED + 2))
+              done
 
-          while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-            if "$PSQL" -U postgres -h 127.0.0.1 -c "SELECT 1" postgres > /dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-            ELAPSED=$((ELAPSED + 2))
-          done
+              if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+                echo "[ERROR] postgres not ready after timeout elapsed=''${TIMEOUT}s"
+                exit 1
+              fi
 
-          if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
-            echo "[ERROR] postgres not ready after timeout elapsed=''${TIMEOUT}s"
-            exit 1
-          fi
+              DB_PASS=$(echo "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|')
 
-          DB_PASS=$(echo "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|')
+              "$PSQL" -U postgres -h 127.0.0.1 postgres <<SQL
+              DO \$\$
+              BEGIN
+                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'csfx') THEN
+                  CREATE ROLE csfx WITH LOGIN PASSWORD '$DB_PASS' CREATEDB;
+                ELSE
+                  ALTER ROLE csfx WITH PASSWORD '$DB_PASS';
+                END IF;
+              END
+              \$\$;
+              SELECT 'CREATE DATABASE csfx OWNER csfx' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'csfx')\gexec
+              SQL
 
-          "$PSQL" -U postgres -h 127.0.0.1 postgres <<SQL
-          DO \$\$
-          BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'csfx') THEN
-              CREATE ROLE csfx WITH LOGIN PASSWORD '$DB_PASS' CREATEDB;
-            ELSE
-              ALTER ROLE csfx WITH PASSWORD '$DB_PASS';
-            END IF;
-          END
-          \$\$;
-          SELECT 'CREATE DATABASE csfx OWNER csfx' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'csfx')\gexec
-          SQL
+              "$PSQL" -U postgres -h 127.0.0.1 csfx <<SQL
+              GRANT ALL ON SCHEMA public TO csfx;
+              ALTER SCHEMA public OWNER TO csfx;
+              SQL
+            '';
+          };
+          environment = { DATABASE_URL = cfg.dbUrl; };
+        };
 
-          "$PSQL" -U postgres -h 127.0.0.1 csfx <<SQL
-          GRANT ALL ON SCHEMA public TO csfx;
-          ALTER SCHEMA public OWNER TO csfx;
-          SQL
-        '';
+        csfx-migrate = {
+          description = "CSFX database migration";
+          after = [ "network.target" "csfx-db-init.service" ];
+          requires = [ "csfx-db-init.service" ];
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${migrateBin}/bin/csfx-migrate";
+            EnvironmentFile = cfg.envFile;
+          };
+          environment = commonEnv;
+        };
+
+        csfx-api-gateway = mkService {
+          description = "CSFX API Gateway";
+          bin = gatewayBin;
+          binName = "api-gateway";
+          listenAddr = "0.0.0.0";
+          extraEnv = {
+            SCHEDULER_SERVICE_URL = "http://localhost:8002";
+            VOLUME_MANAGER_URL = "http://localhost:8003";
+            FAILOVER_CONTROLLER_URL = "http://localhost:8004";
+            SDN_CONTROLLER_URL = "http://localhost:8005";
+            REGISTRY_SERVICE_URL = "http://localhost:8001";
+          };
+        };
+
+        csfx-registry = mkService {
+          description = "CSFX Registry";
+          bin = registryBin;
+          binName = "registry";
+          extraEnv = {
+            SCHEDULER_SERVICE_URL = "http://localhost:8002";
+            API_GATEWAY_URL = "http://localhost:8000";
+          };
+        };
+
+        csfx-scheduler = mkService {
+          description = "CSFX Scheduler";
+          bin = schedulerBin;
+          binName = "scheduler";
+        };
+
+        csfx-volume-manager = mkService {
+          description = "CSFX Volume Manager";
+          bin = volumeManagerBin;
+          binName = "volume-manager";
+        };
+
+        csfx-failover-controller = mkService {
+          description = "CSFX Failover Controller";
+          bin = failoverBin;
+          binName = "failover-controller";
+          extraEnv = {
+            SCHEDULER_SERVICE_URL = "http://localhost:8002";
+            VOLUME_MANAGER_URL = "http://localhost:8003";
+          };
+        };
+
+        csfx-sdn-controller = mkService {
+          description = "CSFX SDN Controller";
+          bin = sdnBin;
+          binName = "sdn-controller";
+          extraEnv = {
+            ETCD_URL = cfg.etcdEndpoints;
+          };
+        };
+
+        csfx-updater = lib.mkIf hasUpdater {
+          description = "CSFX Updater — resolves versions and coordinates node updates via etcd";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "network-online.target" "etcd.service" ];
+          wants = [ "network-online.target" ];
+          requires = [ "etcd.service" ];
+          path = [ pkgs.git ];
+          serviceConfig = {
+            ExecStart = "${updaterBin}/bin/csfx-updater";
+            Restart = "on-failure";
+            RestartSec = "10s";
+            User = "csfx-updater";
+            Group = "csfx-updater";
+          };
+          environment = {
+            ETCD_ENDPOINTS = cfg.etcdEndpoints;
+            INFRA_REPO_MIRROR_URL = cfg.updater.infraRepoMirrorUrl;
+            INFRA_REPO_GITHUB = cfg.updater.infraRepoGithub;
+            INFRA_REPO_BRANCH = cfg.updater.infraRepoBranch;
+            INFRA_REPO_MIRROR_DIR = cfg.updater.mirrorDir;
+            POLL_INTERVAL_SECS = toString cfg.updater.pollIntervalSecs;
+          };
+        };
       };
-      environment = { DATABASE_URL = cfg.dbUrl; };
+
+      tmpfiles.rules = [
+        "d /run/postgresql 0755 patroni patroni -"
+      ];
     };
-
-    systemd.services.csfx-migrate = {
-      description = "CSFX database migration";
-      after    = [ "network.target" "csfx-db-init.service" ];
-      requires = [ "csfx-db-init.service" ];
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        Type              = "oneshot";
-        RemainAfterExit   = true;
-        ExecStart         = "${migrateBin}/bin/csfx-migrate";
-        EnvironmentFile   = cfg.envFile;
-      };
-      environment = commonEnv;
-    };
-
-    systemd.services.csfx-api-gateway = mkService {
-      description = "CSFX API Gateway";
-      bin         = gatewayBin;
-      binName     = "api-gateway";
-      listenAddr  = "0.0.0.0";
-      extraEnv = {
-        SCHEDULER_SERVICE_URL    = "http://localhost:8002";
-        VOLUME_MANAGER_URL       = "http://localhost:8003";
-        FAILOVER_CONTROLLER_URL  = "http://localhost:8004";
-        SDN_CONTROLLER_URL       = "http://localhost:8005";
-        REGISTRY_SERVICE_URL     = "http://localhost:8001";
-      };
-    };
-
-    systemd.services.csfx-registry = mkService {
-      description = "CSFX Registry";
-      bin         = registryBin;
-      binName     = "registry";
-      extraEnv = {
-        SCHEDULER_SERVICE_URL = "http://localhost:8002";
-        API_GATEWAY_URL       = "http://localhost:8000";
-      };
-    };
-
-    systemd.services.csfx-scheduler = mkService {
-      description = "CSFX Scheduler";
-      bin         = schedulerBin;
-      binName     = "scheduler";
-    };
-
-    systemd.services.csfx-volume-manager = mkService {
-      description = "CSFX Volume Manager";
-      bin         = volumeManagerBin;
-      binName     = "volume-manager";
-    };
-
-    systemd.services.csfx-failover-controller = mkService {
-      description = "CSFX Failover Controller";
-      bin         = failoverBin;
-      binName     = "failover-controller";
-      extraEnv = {
-        SCHEDULER_SERVICE_URL = "http://localhost:8002";
-        VOLUME_MANAGER_URL    = "http://localhost:8003";
-      };
-    };
-
-    systemd.services.csfx-sdn-controller = mkService {
-      description = "CSFX SDN Controller";
-      bin         = sdnBin;
-      binName     = "sdn-controller";
-      extraEnv = {
-        ETCD_URL = cfg.etcdEndpoints;
-      };
-    };
-
-    systemd.services.csfx-updater = lib.mkIf hasUpdater {
-      description = "CSFX Updater — resolves versions and coordinates node updates via etcd";
-      wantedBy = [ "multi-user.target" ];
-      after    = [ "network-online.target" "etcd.service" ];
-      wants    = [ "network-online.target" ];
-      requires = [ "etcd.service" ];
-
-      path = [ pkgs.git ];
-
-      serviceConfig = {
-        ExecStart  = "${updaterBin}/bin/csfx-updater";
-        Restart    = "on-failure";
-        RestartSec = "10s";
-        User       = "csfx-updater";
-        Group      = "csfx-updater";
-      };
-
-      environment = {
-        ETCD_ENDPOINTS        = cfg.etcdEndpoints;
-        INFRA_REPO_MIRROR_URL = cfg.updater.infraRepoMirrorUrl;
-        INFRA_REPO_GITHUB     = cfg.updater.infraRepoGithub;
-        INFRA_REPO_BRANCH     = cfg.updater.infraRepoBranch;
-        INFRA_REPO_MIRROR_DIR = cfg.updater.mirrorDir;
-        POLL_INTERVAL_SECS    = toString cfg.updater.pollIntervalSecs;
-      };
-    };
-
-    systemd.tmpfiles.rules = [
-      "d /run/postgresql 0755 patroni patroni -"
-    ];
 
     environment.systemPackages = [ statusScript ];
   };

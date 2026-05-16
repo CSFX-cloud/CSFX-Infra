@@ -15,9 +15,8 @@
 
       mkSystem = { system, modules, extraSpecialArgs ? { } }:
         nixpkgs.lib.nixosSystem {
-          inherit system;
+          inherit system modules;
           specialArgs = { inherit versions; } // extraSpecialArgs;
-          modules = modules;
         };
 
       nodeModules = [
@@ -28,46 +27,65 @@
         self.nixosModules.update-units
       ];
 
-      nodeConfig = nixosConfig: { lib, ... }: {
+      nodeConfig = nixosConfig: { ... }: {
         system.stateVersion = "25.05";
 
         fileSystems."/" = { device = "/dev/disk/by-label/nixos"; fsType = "ext4"; };
         fileSystems."/boot" = { device = "/dev/disk/by-label/boot"; fsType = "vfat"; options = [ "umask=0077" ]; };
         swapDevices = [ ];
 
-        boot.initrd.availableKernelModules = [
-          "virtio_pci" "virtio_blk" "virtio_net" "virtio_scsi"
-          "ahci" "sd_mod" "xhci_pci" "usb_storage" "nvme"
-        ];
+        boot = {
+          initrd.availableKernelModules = [
+            "virtio_pci" "virtio_blk" "virtio_net" "virtio_scsi"
+            "ahci" "sd_mod" "xhci_pci" "usb_storage" "nvme"
+          ];
+          loader = {
+            grub = {
+              enable = true;
+              efiSupport = true;
+              efiInstallAsRemovable = true;
+              device = "nodev";
+              useOSProber = false;
+            };
+            efi.efiSysMountPoint = "/boot";
+          };
+        };
 
-        boot.loader.grub.enable = true;
-        boot.loader.grub.efiSupport = true;
-        boot.loader.grub.efiInstallAsRemovable = true;
-        boot.loader.grub.device = "nodev";
-        boot.loader.grub.useOSProber = false;
-        boot.loader.efi.efiSysMountPoint = "/boot";
-
-        services.csfx-agent.enable = true;
-        services.csfx-agent.gatewayUrl = "http://localhost:8000";
-        services.csfx-cp.enable = true;
-        services.csfx-cp.dbUrl = "";
-        services.csfx-cp.etcdEndpoints = "http://localhost:2379";
-        services.csfx-cp.updater.infraRepoMirrorUrl = "https://github.com/CSFX-cloud/CSFX-Infra.git";
-        services.csfx-cp.updater.infraRepoGithub = "CSFX-cloud/CSFX-Infra";
-        services.csfx-cp.updater.infraRepoBranch = "main";
-        services.csfx-setup.enable = true;
-        services.csfx-setup.dataPart = "/dev/disk/by-label/csfx-data";
-        services.csfx-binary-cache.enable = true;
-        services.csfx-update-units.enable = true;
-        services.csfx-update-units.nixCacheUrl = "http://localhost:5000";
-        services.csfx-update-units.nixCachePublicKey = "";
-        services.csfx-update-units.nixosConfig = nixosConfig;
+        services = {
+          csfx-agent = {
+            enable = true;
+            gatewayUrl = "http://localhost:8000";
+          };
+          csfx-cp = {
+            enable = true;
+            dbUrl = "";
+            etcdEndpoints = "http://localhost:2379";
+            updater = {
+              infraRepoMirrorUrl = "https://github.com/CSFX-cloud/CSFX-Infra.git";
+              infraRepoGithub = "CSFX-cloud/CSFX-Infra";
+              infraRepoBranch = "main";
+            };
+          };
+          csfx-setup = {
+            enable = true;
+            dataPart = "/dev/disk/by-label/csfx-data";
+          };
+          csfx-binary-cache.enable = true;
+          csfx-update-units = {
+            enable = true;
+            nixCacheUrl = "http://localhost:5000";
+            nixCachePublicKey = "";
+            nixosConfig = nixosConfig;
+          };
+        };
       };
 
-      isoConfig = installedSys: isoFileName: { lib, ... }: {
+      isoConfig = _installedSys: isoFileName: { lib, ... }: {
         system.stateVersion = "25.05";
-        services.csfx-autoinstall.enable = true;
-        services.csfx-autoinstall.disk = "auto";
+        services.csfx-autoinstall = {
+          enable = true;
+          disk = "auto";
+        };
         image.fileName = lib.mkForce isoFileName;
       };
     in

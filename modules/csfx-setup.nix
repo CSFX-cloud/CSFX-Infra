@@ -141,92 +141,90 @@ in
 
     '';
 
-    systemd.services.csfx-disk-setup = {
-      description = "CSFX first-boot disk partitioning and formatting";
-      wantedBy = [ "multi-user.target" ];
-      before   = [ "csfx-mount-data.service" "patroni.service" "etcd.service" ];
-      after    = [ "local-fs.target" ];
-
-      serviceConfig = {
-        Type            = "oneshot";
-        RemainAfterExit = true;
-        ExecStart       = diskSetupScript;
-        User            = "root";
+    systemd.services = {
+      csfx-disk-setup = {
+        description = "CSFX first-boot disk partitioning and formatting";
+        wantedBy = [ "multi-user.target" ];
+        before = [ "csfx-mount-data.service" "patroni.service" "etcd.service" ];
+        after = [ "local-fs.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = diskSetupScript;
+          User = "root";
+        };
       };
-    };
 
-    systemd.services.csfx-mount-data = {
-      description = "CSFX mount persistent data partition";
-      wantedBy = [ "multi-user.target" ];
-      after    = [ "csfx-disk-setup.service" ];
-      requires = [ "csfx-disk-setup.service" ];
-      before   = [ "patroni.service" "etcd.service" "csfx-setup.service" ];
-
-      serviceConfig = {
-        Type            = "oneshot";
-        RemainAfterExit = true;
-        ExecStart       = mountScript;
-        User            = "root";
+      csfx-mount-data = {
+        description = "CSFX mount persistent data partition";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "csfx-disk-setup.service" ];
+        requires = [ "csfx-disk-setup.service" ];
+        before = [ "patroni.service" "etcd.service" "csfx-setup.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = mountScript;
+          User = "root";
+        };
       };
-    };
 
-    systemd.services.csfx-setup = {
-      description = "CSFX first-boot bootstrap";
-      wantedBy = [ "multi-user.target" ];
-      after    = [ "network-online.target" "csfx-mount-data.service" ];
-      wants    = [ "network-online.target" ];
-      requires = [ "csfx-mount-data.service" ];
-      before   = [ "csfx-migrate.service" ];
-
-      serviceConfig = {
-        Type            = "oneshot";
-        RemainAfterExit = true;
-        ExecStart       = setupScript;
-        User            = "root";
+      csfx-setup = {
+        description = "CSFX first-boot bootstrap";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network-online.target" "csfx-mount-data.service" ];
+        wants = [ "network-online.target" ];
+        requires = [ "csfx-mount-data.service" ];
+        before = [ "csfx-migrate.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = setupScript;
+          User = "root";
+        };
       };
-    };
 
-    systemd.services.patroni = {
-      after    = [ "csfx-mount-data.service" ];
-      requires = [ "csfx-mount-data.service" ];
-    };
-
-    systemd.services.csfx-cp-ready = {
-      description = "CSFX Control Plane readiness check";
-      wantedBy = [ "multi-user.target" ];
-      after    = [ "csfx-api-gateway.service" ];
-      requires = [ "csfx-api-gateway.service" ];
-
-      serviceConfig = {
-        Type            = "oneshot";
-        RemainAfterExit = true;
-        User            = "root";
-        ExecStart       = pkgs.writeShellScript "csfx-cp-ready" ''
-          set -euo pipefail
-
-          CURL=${pkgs.curl}/bin/curl
-          TIMEOUT=120
-          ELAPSED=0
-
-          while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-            if "$CURL" -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
-              echo "[INFO] control plane ready port=8000"
-              exit 0
-            fi
-            echo "[INFO] control plane not ready elapsed=''${ELAPSED}s timeout=''${TIMEOUT}s"
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-          done
-
-          echo "[ERROR] control plane readiness timeout elapsed=''${TIMEOUT}s"
-          exit 1
-        '';
+      patroni = {
+        after = [ "csfx-mount-data.service" ];
+        requires = [ "csfx-mount-data.service" ];
       };
-    };
 
-    systemd.services."getty@tty1" = {
-      after = [ "csfx-cp-ready.service" ];
-      wants = [ "csfx-cp-ready.service" ];
+      csfx-cp-ready = {
+        description = "CSFX Control Plane readiness check";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "csfx-api-gateway.service" ];
+        requires = [ "csfx-api-gateway.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          User = "root";
+          ExecStart = pkgs.writeShellScript "csfx-cp-ready" ''
+            set -euo pipefail
+
+            CURL=${pkgs.curl}/bin/curl
+            TIMEOUT=120
+            ELAPSED=0
+
+            while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+              if "$CURL" -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
+                echo "[INFO] control plane ready port=8000"
+                exit 0
+              fi
+              echo "[INFO] control plane not ready elapsed=''${ELAPSED}s timeout=''${TIMEOUT}s"
+              sleep 5
+              ELAPSED=$((ELAPSED + 5))
+            done
+
+            echo "[ERROR] control plane readiness timeout elapsed=''${TIMEOUT}s"
+            exit 1
+          '';
+        };
+      };
+
+      "getty@tty1" = {
+        after = [ "csfx-cp-ready.service" ];
+        wants = [ "csfx-cp-ready.service" ];
+      };
     };
   };
 }
