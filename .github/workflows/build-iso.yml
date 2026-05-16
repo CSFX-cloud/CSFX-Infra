@@ -24,10 +24,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - config: csfx-node
+          - config: csfx-node-iso
             arch: amd64
             runner: ubuntu-latest
-          - config: csfx-node-arm64
+          - config: csfx-node-iso-arm64
             arch: arm64
             runner: ubuntu-24.04-arm
 
@@ -80,6 +80,8 @@ jobs:
         run: |
           TAG="iso-dev"
           VERSION=$(grep 'version' versions.nix | head -1 | sed 's/.*"\(.*\)"/\1/')
+          REPO="${{ github.repository }}"
+          BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
           gh release delete "${TAG}" --yes 2>/dev/null || true
           git push origin ":refs/tags/${TAG}" 2>/dev/null || true
@@ -89,6 +91,13 @@ jobs:
             --notes "Latest ISO build from develop branch. Not for production use." \
             --prerelease \
             *.iso *.sha256
+
+          echo "## ISO Download URLs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Config | Arch | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| csfx-node-iso | amd64 | ${BASE}/csfx-node-iso-amd64.iso |" >> $GITHUB_STEP_SUMMARY
+          echo "| csfx-node-iso-arm64 | arm64 | ${BASE}/csfx-node-iso-arm64-arm64.iso |" >> $GITHUB_STEP_SUMMARY
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -115,6 +124,9 @@ jobs:
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           TAG="v${VERSION}"
+          REPO="${{ github.repository }}"
+          BASE="https://github.com/${REPO}/releases/download/${TAG}"
+
           if gh release view "${TAG}" > /dev/null 2>&1; then
             gh release upload "${TAG}" *.iso *.sha256 --clobber
           else
@@ -123,5 +135,12 @@ jobs:
               --generate-notes \
               *.iso *.sha256
           fi
+
+          echo "## ISO Download URLs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Config | Arch | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| csfx-node-iso | amd64 | ${BASE}/csfx-node-iso-amd64.iso |" >> $GITHUB_STEP_SUMMARY
+          echo "| csfx-node-iso-arm64 | arm64 | ${BASE}/csfx-node-iso-arm64-arm64.iso |" >> $GITHUB_STEP_SUMMARY
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

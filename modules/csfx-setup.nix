@@ -3,54 +3,92 @@
 let
   cfg = config.services.csfx-setup;
 
-  setupScript = pkgs.writeShellScript "csfx-setup" ''
+  diskSetupScript = pkgs.writeShellScript "csfx-disk-setup" ''
     set -euo pipefail
 
-    DONE_FILE="/var/lib/csfx/.setup-complete"
-    ENV_FILE="/etc/csfx/cp.env"
+    PART="${cfg.dataPart}"
+    DISK=$(${pkgs.util-linux}/bin/lsblk -no PKNAME "$PART" 2>/dev/null || echo "''${PART%[0-9]*}")
+    MOUNT="/var/lib/csfx-data"
 
-    if [ -f "$DONE_FILE" ]; then
+    if ${pkgs.util-linux}/bin/mountpoint -q "$MOUNT"; then
       exit 0
     fi
 
-    mkdir -p /etc/csfx /var/lib/csfx
+    if ! ${pkgs.util-linux}/bin/blkid "$PART" > /dev/null 2>&1; then
+      if [ ! -b "$PART" ]; then
+        echo "[ERROR] partition does not exist part=''${PART} — disk was not partitioned by installer"
+        exit 1
+      fi
+      echo "[INFO] formatting data partition part=''${PART}"
+      ${pkgs.e2fsprogs}/bin/mkfs.ext4 -L csfx-data "$PART"
+      echo "[INFO] data partition formatted part=''${PART}"
+    fi
 
-    JWT_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
-    DB_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
-    NODE_NAME=$(${pkgs.nettools}/bin/hostname -s)
-    NODE_IP=$(${pkgs.iproute2}/bin/ip route get 1 | ${pkgs.gawk}/bin/awk '{print $7; exit}')
+    mkdir -p "$MOUNT"
+    ${pkgs.util-linux}/bin/mount "$PART" "$MOUNT"
+    echo "[INFO] disk mounted mount=''${MOUNT}"
 
-    cat > "$ENV_FILE" <<EOF
-DATABASE_URL=postgres://csfx:$DB_PASSWORD@patroni:5432/csfx
-JWT_SECRET=$JWT_SECRET
-ETCD_ENDPOINTS=http://etcd:2379
-SCHEDULER_SERVICE_URL=http://csfx-scheduler:8002
-VOLUME_MANAGER_URL=http://csfx-volume-manager:8003
-FAILOVER_CONTROLLER_URL=http://csfx-failover-controller:8004
-SDN_CONTROLLER_URL=http://csfx-sdn-controller:8005
-REGISTRY_SERVICE_URL=http://csfx-registry:8001
-EOF
-    chmod 0600 "$ENV_FILE"
+    mkdir -p \
+      "$MOUNT/csfx" \
+      "$MOUNT/postgresql" \
+      "$MOUNT/etcd" \
+      "$MOUNT/csfx-updater"
 
-    PATRONI_ENV_FILE="/etc/csfx/patroni.env"
-    cat > "$PATRONI_ENV_FILE" <<EOF
-PATRONI_NAME=$NODE_NAME
-PATRONI_SCOPE=csfx
-PATRONI_POSTGRESQL_LISTEN=0.0.0.0:5432
-PATRONI_POSTGRESQL_CONNECT_ADDRESS=patroni:5432
-PATRONI_RESTAPI_LISTEN=0.0.0.0:8008
-PATRONI_RESTAPI_CONNECT_ADDRESS=patroni:8008
-PATRONI_ETCD3_HOSTS=etcd:2379
-PATRONI_SUPERUSER_USERNAME=postgres
-PATRONI_SUPERUSER_PASSWORD=postgres
-PATRONI_REPLICATION_USERNAME=replicator
-PATRONI_REPLICATION_PASSWORD=replicator
-PATRONI_APP_PASSWORD=$DB_PASSWORD
-PGDATA=/data/pgdata
-EOF
-    chmod 0600 "$PATRONI_ENV_FILE"
+    chown patroni:patroni "$MOUNT/postgresql"
+    chown etcd:etcd "$MOUNT/etcd" 2>/dev/null || true
+    chown csfx-updater:csfx-updater "$MOUNT/csfx-updater" 2>/dev/null || true
+    chmod 0700 "$MOUNT/postgresql"
+  '';
 
-    touch "$DONE_FILE"
+  setupScript = pkgs.writeShellScript "csfx-setup" ''
+        set -euo pipefail
+
+        DONE_FILE="/var/lib/csfx-data/csfx/.setup-complete"
+        ENV_FILE="/etc/csfx/cp.env"
+
+        if [ -f "$DONE_FILE" ]; then
+          exit 0
+        fi
+
+        mkdir -p /etc/csfx /var/lib/csfx
+
+        JWT_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+        DB_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        PG_SUPERUSER_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        PG_REPLICATION_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+
+        cat > "$ENV_FILE" <<EOF
+    DATABASE_URL=postgres://csfx:$DB_PASSWORD@localhost:5432/csfx
+    JWT_SECRET=$JWT_SECRET
+    ETCD_ENDPOINTS=http://localhost:2379
+    EOF
+        chmod 0600 "$ENV_FILE"
+
+        printf '%s' "$PG_SUPERUSER_PASSWORD"   > /etc/csfx/patroni-superuser-password
+        printf '%s' "$PG_REPLICATION_PASSWORD" > /etc/csfx/patroni-replication-password
+        chown root:patroni /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
+        chmod 0640 /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
+
+        touch "$DONE_FILE"
+  '';
+
+  mountScript = pkgs.writeShellScript "csfx-mount-data" ''
+    set -euo pipefail
+
+    PART="${cfg.dataPart}"
+    MOUNT="/var/lib/csfx-data"
+
+    if ${pkgs.util-linux}/bin/mountpoint -q "$MOUNT"; then
+      exit 0
+    fi
+
+    mkdir -p "$MOUNT"
+    ${pkgs.util-linux}/bin/mount "$PART" "$MOUNT"
+    echo "[INFO] data partition mounted mount=''${MOUNT}"
+
+    ln -sfn "$MOUNT/postgresql" /var/lib/postgresql
+    ln -sfn "$MOUNT/csfx" /var/lib/csfx-persistent
+    ln -sfn "$MOUNT/csfx-updater" /var/lib/csfx-updater-data
   '';
 
   logo = ''
@@ -66,6 +104,19 @@ in
 {
   options.services.csfx-setup = {
     enable = lib.mkEnableOption "CSFX first-boot bootstrap";
+
+    dataPart = lib.mkOption {
+      type = lib.types.str;
+      default = "/dev/sda3";
+      description = "Partition device for persistent data (PostgreSQL, etcd, config). Must not be the boot partition.";
+    };
+
+    dataSize = lib.mkOption {
+      type = lib.types.str;
+      default = "100%";
+      example = "50GiB";
+      description = "Size of the data partition. Use '100%' to fill remaining disk space, or a fixed size like '20GiB'.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -86,82 +137,94 @@ in
       ${logo}
       CSFX Node — v${versions.csfx.version}
       Access this node only via the CSFX API or CLI.
+      Run 'csfx-status' for control plane overview.
 
     '';
 
-    systemd.services.csfx-setup = {
-      description = "CSFX first-boot bootstrap";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      before = [ "csfx-daemon.service" ];
+    systemd.services = {
+      csfx-disk-setup = {
+        description = "CSFX first-boot disk partitioning and formatting";
+        wantedBy = [ "multi-user.target" ];
+        before = [ "csfx-mount-data.service" "patroni.service" "etcd.service" ];
+        after = [ "local-fs.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = diskSetupScript;
+          User = "root";
+        };
+      };
 
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = setupScript;
-        User = "root";
+      csfx-mount-data = {
+        description = "CSFX mount persistent data partition";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "csfx-disk-setup.service" ];
+        requires = [ "csfx-disk-setup.service" ];
+        before = [ "patroni.service" "etcd.service" "csfx-setup.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = mountScript;
+          User = "root";
+        };
+      };
+
+      csfx-setup = {
+        description = "CSFX first-boot bootstrap";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network-online.target" "csfx-mount-data.service" ];
+        wants = [ "network-online.target" ];
+        requires = [ "csfx-mount-data.service" ];
+        before = [ "csfx-migrate.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = setupScript;
+          User = "root";
+        };
+      };
+
+      patroni = {
+        after = [ "csfx-mount-data.service" ];
+        requires = [ "csfx-mount-data.service" ];
+      };
+
+      csfx-cp-ready = {
+        description = "CSFX Control Plane readiness check";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "csfx-api-gateway.service" ];
+        requires = [ "csfx-api-gateway.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          User = "root";
+          ExecStart = pkgs.writeShellScript "csfx-cp-ready" ''
+            set -euo pipefail
+
+            CURL=${pkgs.curl}/bin/curl
+            TIMEOUT=120
+            ELAPSED=0
+
+            while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
+              if "$CURL" -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
+                echo "[INFO] control plane ready port=8000"
+                exit 0
+              fi
+              echo "[INFO] control plane not ready elapsed=''${ELAPSED}s timeout=''${TIMEOUT}s"
+              sleep 5
+              ELAPSED=$((ELAPSED + 5))
+            done
+
+            echo "[ERROR] control plane readiness timeout elapsed=''${TIMEOUT}s"
+            exit 1
+          '';
+        };
+      };
+
+      "getty@tty1" = {
+        after = [ "csfx-cp-ready.service" ];
+        wants = [ "csfx-cp-ready.service" ];
       };
     };
-
-    systemd.services.csfx-cp = {
-      description = "CSFX Control Plane (Docker Compose)";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "docker.service" "csfx-setup.service" ];
-      requires = [ "docker.service" ];
-      wants = [ "csfx-setup.service" ];
-      unitConfig.ConditionPathExists = "/var/lib/csfx/.setup-complete";
-
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        EnvironmentFile = "/etc/csfx/cp.env";
-        ExecStart = "${pkgs.docker-compose}/bin/docker-compose -f /etc/csfx/docker-compose.yml up -d --remove-orphans";
-        ExecStop = "${pkgs.docker-compose}/bin/docker-compose -f /etc/csfx/docker-compose.yml down";
-        User = "root";
-      };
-    };
-
-    systemd.services.csfx-cp-ready = {
-      description = "CSFX Control Plane readiness check";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "csfx-cp.service" ];
-      requires = [ "csfx-cp.service" ];
-
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        User = "root";
-        ExecStart = pkgs.writeShellScript "csfx-cp-ready" ''
-          set -euo pipefail
-
-          CURL=${pkgs.curl}/bin/curl
-          TIMEOUT=120
-          ELAPSED=0
-
-          while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-            if "$CURL" -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
-              echo "[INFO] control plane ready port=8000"
-              exit 0
-            fi
-            echo "[INFO] control plane not ready elapsed=''${ELAPSED}s timeout=''${TIMEOUT}s"
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-          done
-
-          echo "[ERROR] control plane readiness timeout elapsed=''${TIMEOUT}s"
-          exit 1
-        '';
-      };
-    };
-
-    systemd.services."getty@tty1" = {
-      after = [ "csfx-cp-ready.service" ];
-      wants = [ "csfx-cp-ready.service" ];
-    };
-
-    virtualisation.docker.enable = true;
-
-    environment.systemPackages = [ pkgs.docker-compose ];
   };
 }
