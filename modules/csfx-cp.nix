@@ -20,31 +20,31 @@ let
       '';
     };
 
-  migrateBin      = mkBin "csfx-migrate"        cp.migrate;
-  gatewayBin      = mkBin "api-gateway"          cp."api-gateway";
-  registryBin     = mkBin "registry"             cp.registry;
-  schedulerBin    = mkBin "scheduler"            cp.scheduler;
-  volumeManagerBin = mkBin "volume-manager"      cp."volume-manager";
-  failoverBin     = mkBin "failover-controller"  cp."failover-controller";
-  sdnBin          = mkBin "sdn-controller"       cp."sdn-controller";
-  hasUpdater      = cp ? "csfx-updater";
-  updaterBin      = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
+  migrateBin = mkBin "csfx-migrate" cp.migrate;
+  gatewayBin = mkBin "api-gateway" cp."api-gateway";
+  registryBin = mkBin "registry" cp.registry;
+  schedulerBin = mkBin "scheduler" cp.scheduler;
+  volumeManagerBin = mkBin "volume-manager" cp."volume-manager";
+  failoverBin = mkBin "failover-controller" cp."failover-controller";
+  sdnBin = mkBin "sdn-controller" cp."sdn-controller";
+  hasUpdater = cp ? "csfx-updater";
+  updaterBin = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
 
   commonEnv = {
-    DATABASE_URL    = cfg.dbUrl;
-    ETCD_ENDPOINTS  = cfg.etcdEndpoints;
+    DATABASE_URL = cfg.dbUrl;
+    ETCD_ENDPOINTS = cfg.etcdEndpoints;
   };
 
-  mkService = { description, bin, binName, extraEnv ? {}, after ? [], requires ? [], listenAddr ? "127.0.0.1" }: {
+  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1" }: {
     inherit description;
-    after    = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
+    after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
     requires = [ "csfx-migrate.service" ] ++ requires;
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
-      ExecStart     = "${bin}/bin/${binName}";
-      Restart       = "on-failure";
-      RestartSec    = "5s";
-      DynamicUser   = true;
+      ExecStart = "${bin}/bin/${binName}";
+      Restart = "on-failure";
+      RestartSec = "5s";
+      DynamicUser = true;
       EnvironmentFile = cfg.envFile;
     };
     environment = commonEnv // extraEnv // { LISTEN_ADDR = listenAddr; };

@@ -41,35 +41,35 @@ let
   '';
 
   setupScript = pkgs.writeShellScript "csfx-setup" ''
-    set -euo pipefail
+        set -euo pipefail
 
-    DONE_FILE="/var/lib/csfx-data/csfx/.setup-complete"
-    ENV_FILE="/etc/csfx/cp.env"
+        DONE_FILE="/var/lib/csfx-data/csfx/.setup-complete"
+        ENV_FILE="/etc/csfx/cp.env"
 
-    if [ -f "$DONE_FILE" ]; then
-      exit 0
-    fi
+        if [ -f "$DONE_FILE" ]; then
+          exit 0
+        fi
 
-    mkdir -p /etc/csfx /var/lib/csfx
+        mkdir -p /etc/csfx /var/lib/csfx
 
-    JWT_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
-    DB_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
-    PG_SUPERUSER_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
-    PG_REPLICATION_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        JWT_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+        DB_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        PG_SUPERUSER_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        PG_REPLICATION_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
 
-    cat > "$ENV_FILE" <<EOF
-DATABASE_URL=postgres://csfx:$DB_PASSWORD@localhost:5432/csfx
-JWT_SECRET=$JWT_SECRET
-ETCD_ENDPOINTS=http://localhost:2379
-EOF
-    chmod 0600 "$ENV_FILE"
+        cat > "$ENV_FILE" <<EOF
+    DATABASE_URL=postgres://csfx:$DB_PASSWORD@localhost:5432/csfx
+    JWT_SECRET=$JWT_SECRET
+    ETCD_ENDPOINTS=http://localhost:2379
+    EOF
+        chmod 0600 "$ENV_FILE"
 
-    printf '%s' "$PG_SUPERUSER_PASSWORD"   > /etc/csfx/patroni-superuser-password
-    printf '%s' "$PG_REPLICATION_PASSWORD" > /etc/csfx/patroni-replication-password
-    chown root:patroni /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
-    chmod 0640 /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
+        printf '%s' "$PG_SUPERUSER_PASSWORD"   > /etc/csfx/patroni-superuser-password
+        printf '%s' "$PG_REPLICATION_PASSWORD" > /etc/csfx/patroni-replication-password
+        chown root:patroni /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
+        chmod 0640 /etc/csfx/patroni-superuser-password /etc/csfx/patroni-replication-password
 
-    touch "$DONE_FILE"
+        touch "$DONE_FILE"
   '';
 
   mountScript = pkgs.writeShellScript "csfx-mount-data" ''

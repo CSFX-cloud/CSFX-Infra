@@ -36,8 +36,15 @@
 
         boot = {
           initrd.availableKernelModules = [
-            "virtio_pci" "virtio_blk" "virtio_net" "virtio_scsi"
-            "ahci" "sd_mod" "xhci_pci" "usb_storage" "nvme"
+            "virtio_pci"
+            "virtio_blk"
+            "virtio_net"
+            "virtio_scsi"
+            "ahci"
+            "sd_mod"
+            "xhci_pci"
+            "usb_storage"
+            "nvme"
           ];
           loader = {
             grub = {
