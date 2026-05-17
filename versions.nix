@@ -29,7 +29,7 @@
         };
         arm64 = {
           url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.473/csfx-cp-api-gateway-arm64";
-          sha256 = "93a60df905b452d02f5816e2fd5536360e4d8e0bb6480743772b01666b087642";
+          sha256 = "c621f95af125b74441ec7b1cef03046055756f0a062849a468db37858706b869";
         };
       };
       registry = {
