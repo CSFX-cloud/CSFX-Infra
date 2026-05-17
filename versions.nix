@@ -25,7 +25,7 @@
       api-gateway = {
         amd64 = {
           url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.473/csfx-cp-api-gateway-amd64";
-          sha256 = "fefe72819db3674a8002b6bcaf083dd77642361dfda7bd4adb15ffdfadfaa194";
+          sha256 = "7aa45bdeb272ce52efa97c091f710483d89fa11db07a73d7defbcc1d677407d5";
         };
         arm64 = {
           url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.473/csfx-cp-api-gateway-arm64";
