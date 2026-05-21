@@ -30,6 +30,8 @@
       nodeConfig = nixosConfig: _: {
         system.stateVersion = "25.05";
 
+        networking.nameservers = [ "1.1.1.1" "9.9.9.9" ];
+
         fileSystems."/" = { device = "/dev/disk/by-label/nixos"; fsType = "ext4"; };
         fileSystems."/boot" = { device = "/dev/disk/by-label/boot"; fsType = "vfat"; options = [ "umask=0077" ]; };
         swapDevices = [ ];
