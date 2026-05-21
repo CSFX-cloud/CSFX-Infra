@@ -122,26 +122,39 @@ in
   config = lib.mkIf cfg.enable {
     services.openssh.enable = lib.mkForce false;
 
+    users.users.root.hashedPassword = "$6$YafaIErlC0RdeFf0$971JnpA/Zjs0u/q5liqHQF4pAG3HyPCqus.ejj6VZXm.9FfUd5br0tdIWS9kiDh6H2bxqAtEPOU7sU8CO4mGF.";
+
     networking.firewall = {
       enable = true;
       allowedTCPPorts = [ 8000 ];
     };
 
-    environment.etc."issue".text = ''
-      ${logo}
-      CSFX Node — v${versions.csfx.version}
-
-    '';
-
-    environment.etc."motd".text = ''
-      ${logo}
-      CSFX Node — v${versions.csfx.version}
-      Access this node only via the CSFX API or CLI.
-      Run 'csfx-status' for control plane overview.
-
+    environment.etc."profile.d/csfx-motd.sh".source = pkgs.writeShellScript "csfx-motd" ''
+      printf 'Access this node only via the CSFX API or CLI.\n'
+      printf "Run 'csfx-status' for control plane overview.\n\n"
     '';
 
     systemd.services = {
+      csfx-update-issue = {
+        description = "Write /etc/issue with IP after network is online";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          User = "root";
+          ExecStart = pkgs.writeShellScript "csfx-update-issue" ''
+            IP=$(${pkgs.iproute2}/bin/ip -4 addr show scope global 2>/dev/null \
+              | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}' \
+              | head -1)
+            printf '%s\n' '${logo}' > /run/csfx-issue
+            printf 'CSFX Node -- v${versions.csfx.version}\n' >> /run/csfx-issue
+            printf 'IP: %s\n\n' "''${IP:-unknown}" >> /run/csfx-issue
+          '';
+        };
+      };
+
       csfx-disk-setup = {
         description = "CSFX first-boot disk partitioning and formatting";
         wantedBy = [ "multi-user.target" ];
@@ -222,8 +235,11 @@ in
       };
 
       "getty@tty1" = {
-        after = [ "csfx-cp-ready.service" ];
-        wants = [ "csfx-cp-ready.service" ];
+        after = [ "csfx-cp-ready.service" "csfx-update-issue.service" ];
+        wants = [ "csfx-cp-ready.service" "csfx-update-issue.service" ];
+        serviceConfig = {
+          ExecStart = lib.mkForce "${pkgs.util-linux}/sbin/agetty --issue-file /run/csfx-issue --login-pause %I $TERM";
+        };
       };
     };
   };
