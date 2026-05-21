@@ -1,12 +1,7 @@
 name: Artifact Cleanup
 
 on:
-  workflow_run:
-    workflows: ["Build NixOS ISOs"]
-    types:
-      - completed
-  schedule:
-    - cron: "0 4 * * *"
+  workflow_call:
 
 permissions:
   contents: write
@@ -14,104 +9,76 @@ permissions:
 
 jobs:
   cleanup:
-    name: Rotate ISO pre-release artifacts and tags
+    name: Rotate pre-release artifacts and tags
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
     steps:
-      - name: Rotate releases and artifacts
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+      - name: Delete old pre-release releases and tags (keep 2 per branch)
         run: |
           set -euo pipefail
 
+          PROTECTED="iso-latest"
+
           gh release list --repo "$REPO" --limit 200 \
-            --json tagName,body,createdAt,isPrerelease \
-            > /tmp/releases.json
+            --json tagName,isPrerelease,createdAt \
+            | jq -r '.[] | select(.isPrerelease == true) | [.tagName, .createdAt] | @tsv' \
+            | sort -t$'\t' -k2,2r \
+            | awk -F'\t' -v protected="$PROTECTED" '
+                {
+                  tag = $1
+                  if (tag == protected) next
+                  if (match(tag, /--(.+)$/, m)) branch = m[1]
+                  else branch = "unknown"
+                  count[branch]++
+                  if (count[branch] > 2) print tag
+                }
+            ' \
+            | while read -r tag; do
+                echo "[INFO] deleting release tag=${tag}"
+                gh release delete "$tag" --repo "$REPO" --yes --cleanup-tag || \
+                  echo "[WARN] delete failed tag=${tag}"
+              done
 
-          gh api "repos/${REPO}/actions/artifacts?per_page=100" \
-            --paginate \
-            | jq -r '.artifacts[] | select(.expired == false) | [.id, .name, .created_at, (.workflow_run.head_branch // "unknown")] | @tsv' \
-            > /tmp/artifacts.tsv
+      - name: Delete orphaned tags without release
+        run: |
+          set -euo pipefail
 
-          python3 - <<'EOF'
-          import json, subprocess, re, sys, os
-          from datetime import datetime, timezone
-          from collections import defaultdict
+          PROTECTED="iso-latest"
 
-          GRACE_SECS = 86400
-          MAX_PER_BRANCH = 2
-          NOW = datetime.now(timezone.utc)
-          REPO = os.environ["REPO"]
+          gh api "repos/${REPO}/git/refs/tags" --paginate \
+            | jq -r '.[].ref | ltrimstr("refs/tags/")' \
+            | while read -r tag; do
+                [ "$tag" = "$PROTECTED" ] && continue
+                if ! gh release view "$tag" --repo "$REPO" > /dev/null 2>&1; then
+                  echo "[INFO] deleting orphaned tag=${tag}"
+                  gh api -X DELETE "repos/${REPO}/git/refs/tags/${tag}" || \
+                    echo "[WARN] delete failed tag=${tag}"
+                fi
+              done
 
-          ISO_PRERELEASE_RE = re.compile(r'^iso-v\d+\.\d+\.\d+-(alpha|beta|rc)\.(\d+)$')
-          STABLE_RE = re.compile(r'^v\d+\.\d+\.\d+$')
-          PROTECTED_TAGS = {"iso-latest"}
+      - name: Delete old Actions artifacts (keep 2 per name+branch)
+        run: |
+          set -euo pipefail
 
-          with open("/tmp/releases.json") as f:
-              releases = json.load(f)
-
-          branch_releases = {}
-          for r in releases:
-              tag = r["tagName"]
-              if tag in PROTECTED_TAGS or STABLE_RE.match(tag):
-                  continue
-              if not r["isPrerelease"]:
-                  continue
-              m = ISO_PRERELEASE_RE.match(tag)
-              if not m:
-                  continue
-              body = r.get("body") or ""
-              branch = None
-              for line in body.splitlines():
-                  if line.startswith("branch: "):
-                      branch = line[len("branch: "):].strip()
-                      break
-              if not branch:
-                  continue
-              count = int(m.group(2))
-              created = datetime.fromisoformat(r["createdAt"].replace("Z", "+00:00"))
-              branch_releases.setdefault(branch, []).append((count, tag, created))
-
-          for branch, entries in branch_releases.items():
-              entries.sort(key=lambda x: x[0])
-              for count, tag, created in entries[:-MAX_PER_BRANCH]:
-                  age = (NOW - created).total_seconds()
-                  if age < GRACE_SECS:
-                      print(f"[INFO] skip tag={tag} age={int(age)}s below grace period")
-                      continue
-                  print(f"[INFO] deleting tag={tag} branch={branch} age={int(age)}s")
-                  result = subprocess.run(
-                      ["gh", "release", "delete", tag, "--repo", REPO, "--yes", "--cleanup-tag"],
-                      capture_output=True, text=True
-                  )
-                  if result.returncode != 0:
-                      print(f"[WARN] delete failed tag={tag} err={result.stderr.strip()}", file=sys.stderr)
-
-          groups = defaultdict(list)
-          with open("/tmp/artifacts.tsv") as f:
-              for line in f:
-                  line = line.strip()
-                  if not line:
-                      continue
-                  parts = line.split("\t")
-                  if len(parts) < 4:
-                      continue
-                  artifact_id, name, created_at, branch = parts[0], parts[1], parts[2], parts[3]
-                  created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                  groups[(name, branch)].append((created, artifact_id))
-
-          for (name, branch), entries in groups.items():
-              entries.sort(key=lambda x: x[0], reverse=True)
-              for created, artifact_id in entries[MAX_PER_BRANCH:]:
-                  age = (NOW - created).total_seconds()
-                  if age < GRACE_SECS:
-                      print(f"[INFO] skip artifact_id={artifact_id} name={name} age={int(age)}s below grace period")
-                      continue
-                  print(f"[INFO] deleting artifact_id={artifact_id} name={name} branch={branch} age={int(age)}s")
-                  result = subprocess.run(
-                      ["gh", "api", "-X", "DELETE", f"repos/{REPO}/actions/artifacts/{artifact_id}"],
-                      capture_output=True, text=True
-                  )
-                  if result.returncode != 0:
-                      print(f"[WARN] delete failed artifact_id={artifact_id} err={result.stderr.strip()}", file=sys.stderr)
-          EOF
+          gh api "repos/${REPO}/actions/artifacts?per_page=100" --paginate \
+            | jq -r '.artifacts[] | select(.expired == false) | [
+                (.id | tostring),
+                .name,
+                (.workflow_run.head_branch // "unknown"),
+                .created_at
+              ] | @tsv' \
+            | sort -t$'\t' -k2,2 -k3,3 -k4,4r \
+            | awk -F'\t' '
+                {
+                  key = $2 SUBSEP $3
+                  count[key]++
+                  if (count[key] > 2) print $1
+                }
+            ' \
+            | while read -r id; do
+                echo "[INFO] deleting artifact id=${id}"
+                gh api -X DELETE "repos/${REPO}/actions/artifacts/${id}" || \
+                  echo "[WARN] delete failed artifact_id=${id}"
+              done
