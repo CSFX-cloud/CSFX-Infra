@@ -1,10 +1,7 @@
 name: Artifact Cleanup
 
 on:
-  workflow_run:
-    workflows: ["Build NixOS ISOs"]
-    types:
-      - completed
+  push:
     branches:
       - main
       - develop
