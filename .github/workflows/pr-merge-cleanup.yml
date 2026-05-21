@@ -14,56 +14,44 @@ jobs:
     name: Remove ISO pre-releases for merged branch
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
     steps:
-      - name: Delete stale ISO pre-releases for branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          BRANCH: ${{ github.event.pull_request.head.ref }}
+      - name: Delete all ISO pre-releases for branch
         run: |
           set -euo pipefail
 
           BRANCH_SLUG=$(echo "$BRANCH" | sed 's|/|-|g')
 
-          TAGS=$(gh release list --repo "$REPO" --limit 200 \
+          gh release list --repo "$REPO" --limit 200 \
             --json tagName,isPrerelease \
             | jq -r --arg slug "$BRANCH_SLUG" '
                 .[]
                 | select(.isPrerelease == true)
-                | select(.tagName | test("^iso-v[0-9]+\\.[0-9]+\\.[0-9]+-(alpha|beta|rc)\\.[0-9]+--" + $slug + "$"))
+                | select(.tagName | endswith("--" + $slug))
                 | .tagName
-              ')
+              ' \
+            | while read -r tag; do
+                echo "[INFO] deleting tag=${tag} branch=${BRANCH}"
+                gh release delete "$tag" --repo "$REPO" --yes --cleanup-tag || \
+                  echo "[WARN] delete failed tag=${tag}"
+              done
 
-          if [ -z "$TAGS" ]; then
-            echo "[INFO] no ISO pre-releases found branch=${BRANCH}"
-            exit 0
-          fi
+      - name: Delete Actions artifacts for branch
+        run: |
+          set -euo pipefail
 
-          LATEST=$(echo "$TAGS" \
-            | grep -oE '\.[0-9]+--' \
-            | grep -oE '[0-9]+' \
-            | sort -n \
-            | tail -1)
-
-          LATEST_TAG=$(echo "$TAGS" \
-            | grep -E "\.${LATEST}--" \
-            | head -1)
-
-          echo "[INFO] keeping tag=${LATEST_TAG} branch=${BRANCH}"
-
-          echo "$TAGS" | while read -r TAG; do
-            if [ "$TAG" = "$LATEST_TAG" ]; then
-              continue
-            fi
-            echo "[INFO] deleting tag=${TAG} branch=${BRANCH}"
-            gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag || true
-          done
-
-          RUN_IDS=$(gh run list --repo "$REPO" --workflow build-iso.yml \
-            --branch "$BRANCH" --limit 100 --json databaseId \
-            | jq -r '.[].databaseId')
-
-          echo "$RUN_IDS" | tail -n +2 | while read -r RUN_ID; do
-            echo "[INFO] deleting run artifacts run_id=${RUN_ID}"
-            gh api -X DELETE "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" 2>/dev/null || true
-          done
+          gh api "repos/${REPO}/actions/artifacts?per_page=100" --paginate \
+            | jq -r --arg branch "$BRANCH" '
+                .artifacts[]
+                | select(.expired == false)
+                | select((.workflow_run.head_branch // "") == $branch)
+                | .id | tostring
+              ' \
+            | while read -r id; do
+                echo "[INFO] deleting artifact id=${id} branch=${BRANCH}"
+                gh api -X DELETE "repos/${REPO}/actions/artifacts/${id}" || \
+                  echo "[WARN] delete failed artifact_id=${id}"
+              done
