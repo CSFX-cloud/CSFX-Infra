@@ -25,7 +25,7 @@ jobs:
           set -euo pipefail
 
           gh release list --repo "$REPO" --limit 200 \
-            --json tagName,body,createdAt,isPrerelease \
+            --json tagName,createdAt,isPrerelease \
             > /tmp/releases.json
 
           gh api "repos/${REPO}/actions/artifacts?per_page=100" \
@@ -43,14 +43,14 @@ jobs:
           NOW = datetime.now(timezone.utc)
           REPO = os.environ["REPO"]
 
-          ISO_PRERELEASE_RE = re.compile(r'^iso-v\d+\.\d+\.\d+-(alpha|beta|rc)\.(\d+)$')
+          ISO_PRERELEASE_RE = re.compile(r'^iso-v\d+\.\d+\.\d+-(alpha|beta|rc)\.(\d+)--(.+)$')
           STABLE_RE = re.compile(r'^v\d+\.\d+\.\d+$')
           PROTECTED_TAGS = {"iso-latest"}
 
           with open("/tmp/releases.json") as f:
               releases = json.load(f)
 
-          branch_releases = {}
+          branch_releases = defaultdict(list)
           for r in releases:
               tag = r["tagName"]
               if tag in PROTECTED_TAGS or STABLE_RE.match(tag):
@@ -60,17 +60,10 @@ jobs:
               m = ISO_PRERELEASE_RE.match(tag)
               if not m:
                   continue
-              body = r.get("body") or ""
-              branch = None
-              for line in body.splitlines():
-                  if line.startswith("branch: "):
-                      branch = line[len("branch: "):].strip()
-                      break
-              if not branch:
-                  continue
               count = int(m.group(2))
+              branch = m.group(3)
               created = datetime.fromisoformat(r["createdAt"].replace("Z", "+00:00"))
-              branch_releases.setdefault(branch, []).append((count, tag, created))
+              branch_releases[branch].append((count, tag, created))
 
           for branch, entries in branch_releases.items():
               entries.sort(key=lambda x: x[0])

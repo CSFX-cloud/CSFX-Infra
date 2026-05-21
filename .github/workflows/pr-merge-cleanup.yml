@@ -23,12 +23,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          TAGS=$(gh release list --repo "$REPO" --limit 200 --json tagName,body,isPrerelease \
-            | jq -r --arg branch "$BRANCH" '
+          BRANCH_SLUG=$(echo "$BRANCH" | sed 's|/|-|g')
+
+          TAGS=$(gh release list --repo "$REPO" --limit 200 \
+            --json tagName,isPrerelease \
+            | jq -r --arg slug "$BRANCH_SLUG" '
                 .[]
                 | select(.isPrerelease == true)
-                | select(.tagName | test("^iso-v[0-9]+\\.[0-9]+\\.[0-9]+-(alpha|beta|rc)\\.[0-9]+$"))
-                | select(.body | test("^branch: " + $branch + "$"; "m"))
+                | select(.tagName | test("^iso-v[0-9]+\\.[0-9]+\\.[0-9]+-(alpha|beta|rc)\\.[0-9]+--" + $slug + "$"))
                 | .tagName
               ')
 
@@ -38,13 +40,13 @@ jobs:
           fi
 
           LATEST=$(echo "$TAGS" \
-            | grep -oE '\.[0-9]+$' \
-            | tr -d '.' \
+            | grep -oE '\.[0-9]+--' \
+            | grep -oE '[0-9]+' \
             | sort -n \
             | tail -1)
 
           LATEST_TAG=$(echo "$TAGS" \
-            | grep -E "\\.${LATEST}$" \
+            | grep -E "\.${LATEST}--" \
             | head -1)
 
           echo "[INFO] keeping tag=${LATEST_TAG} branch=${BRANCH}"

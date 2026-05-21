@@ -91,13 +91,14 @@ jobs:
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           BRANCH="${{ steps.ver.outputs.branch }}"
-          TAG="iso-v${VERSION}"
+          BRANCH_SLUG=$(echo "$BRANCH" | sed 's|/|-|g')
+          TAG="iso-v${VERSION}--${BRANCH_SLUG}"
           REPO="${{ github.repository }}"
           BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
           gh release create "${TAG}" \
-            --title "ISO v${VERSION}" \
-            --notes "branch: ${BRANCH}" \
+            --title "ISO v${VERSION} (${BRANCH})" \
+            --notes "" \
             --prerelease \
             *.iso *.sha256
 
