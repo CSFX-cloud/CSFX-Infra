@@ -5,6 +5,12 @@ on:
     workflows: ["Build NixOS ISOs"]
     types:
       - completed
+    branches:
+      - main
+      - develop
+      - "feat/**"
+      - "fix/**"
+      - "chore/**"
   schedule:
     - cron: "0 4 * * *"
 
