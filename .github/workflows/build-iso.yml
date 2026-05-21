@@ -49,11 +49,9 @@ jobs:
       - name: Collect ISO
         run: |
           ISO_PATH=$(readlink -f result-${{ matrix.config }}/iso/*.iso)
-          VERSION=$(nix eval --raw .#nixosConfigurations.${{ matrix.config }}.config.system.nixos.label 2>/dev/null || echo "unknown")
           OUTNAME="${{ matrix.config }}-${{ matrix.arch }}.iso"
           cp "${ISO_PATH}" "${OUTNAME}"
           sha256sum "${OUTNAME}" > "${OUTNAME}.sha256"
-          echo "iso=${OUTNAME}" >> $GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
         with:
@@ -61,7 +59,7 @@ jobs:
           path: |
             ${{ matrix.config }}-${{ matrix.arch }}.iso
             ${{ matrix.config }}-${{ matrix.arch }}.iso.sha256
-          retention-days: 14
+          retention-days: 3
 
   release-dev:
     name: Publish dev ISOs
@@ -70,27 +68,35 @@ jobs:
     if: github.ref == 'refs/heads/develop'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
           pattern: csfx-*
           merge-multiple: true
 
-      - name: Replace dev release
+      - name: Resolve version
+        id: ver
         run: |
-          TAG="iso-dev"
           VERSION=$(grep 'version' versions.nix | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Create versioned pre-release
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          TAG="iso-v${VERSION}"
           REPO="${{ github.repository }}"
           BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
-          gh release delete "${TAG}" --yes 2>/dev/null || true
-          git push origin ":refs/tags/${TAG}" 2>/dev/null || true
-
           gh release create "${TAG}" \
-            --title "Dev ISO — v${VERSION}" \
-            --notes "Latest ISO build from develop branch. Not for production use." \
+            --title "ISO v${VERSION}" \
+            --notes "branch: develop" \
             --prerelease \
             *.iso *.sha256
+
+          git tag -f iso-latest
+          git push origin iso-latest --force
 
           echo "## ISO Download URLs" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

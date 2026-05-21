@@ -1,0 +1,67 @@
+name: PR Merge Cleanup
+
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cleanup:
+    name: Remove ISO pre-releases for merged branch
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete stale ISO pre-releases for branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          TAGS=$(gh release list --repo "$REPO" --limit 200 --json tagName,body,isPrerelease \
+            | jq -r --arg branch "$BRANCH" '
+                .[]
+                | select(.isPrerelease == true)
+                | select(.tagName | test("^iso-v[0-9]+\\.[0-9]+\\.[0-9]+-(alpha|beta|rc)\\.[0-9]+$"))
+                | select(.body | test("^branch: " + $branch + "$"; "m"))
+                | .tagName
+              ')
+
+          if [ -z "$TAGS" ]; then
+            echo "[INFO] no ISO pre-releases found branch=${BRANCH}"
+            exit 0
+          fi
+
+          LATEST=$(echo "$TAGS" \
+            | grep -oE '\.[0-9]+$' \
+            | tr -d '.' \
+            | sort -n \
+            | tail -1)
+
+          LATEST_TAG=$(echo "$TAGS" \
+            | grep -E "\\.${LATEST}$" \
+            | head -1)
+
+          echo "[INFO] keeping tag=${LATEST_TAG} branch=${BRANCH}"
+
+          echo "$TAGS" | while read -r TAG; do
+            if [ "$TAG" = "$LATEST_TAG" ]; then
+              continue
+            fi
+            echo "[INFO] deleting tag=${TAG} branch=${BRANCH}"
+            gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag || true
+          done
+
+          RUN_IDS=$(gh run list --repo "$REPO" --workflow build-iso.yml \
+            --branch "$BRANCH" --limit 100 --json databaseId \
+            | jq -r '.[].databaseId')
+
+          echo "$RUN_IDS" | tail -n +2 | while read -r RUN_ID; do
+            echo "[INFO] deleting run artifacts run_id=${RUN_ID}"
+            gh api -X DELETE "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" 2>/dev/null || true
+          done
