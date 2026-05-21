@@ -82,7 +82,7 @@ jobs:
       - name: Resolve version
         id: ver
         run: |
-          VERSION=$(grep 'version' versions.nix | head -1 | sed 's/.*"\(.*\)"/\1/')
+          VERSION=$(grep -m1 'version' versions.nix | sed 's/[^"]*"\([^"]*\)".*/\1/')
           BRANCH="${{ github.ref_name }}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
@@ -98,11 +98,15 @@ jobs:
           REPO="${{ github.repository }}"
           BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
-          gh release create "${TAG}" \
-            --title "ISO v${VERSION} (${BRANCH})" \
-            --notes "" \
-            --prerelease \
-            *.iso *.sha256
+          if gh release view "${TAG}" --repo "$REPO" > /dev/null 2>&1; then
+            gh release upload "${TAG}" --repo "$REPO" *.iso *.sha256 --clobber
+          else
+            gh release create "${TAG}" \
+              --title "ISO v${VERSION} (${BRANCH})" \
+              --notes "" \
+              --prerelease \
+              *.iso *.sha256
+          fi
 
           if [ "${BRANCH}" = "develop" ]; then
             SHA="${{ github.sha }}"
