@@ -1,15 +1,7 @@
 name: Artifact Cleanup
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-      - "feat/**"
-      - "fix/**"
-      - "chore/**"
-  schedule:
-    - cron: "0 4 * * *"
+  workflow_call:
 
 permissions:
   contents: write
@@ -23,36 +15,47 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
     steps:
-      - name: Delete old pre-release tags (keep 2 per branch)
+      - name: Delete old pre-release releases and tags (keep 2 per branch)
         run: |
           set -euo pipefail
+
+          PROTECTED="iso-latest"
 
           gh release list --repo "$REPO" --limit 200 \
             --json tagName,isPrerelease,createdAt \
             | jq -r '.[] | select(.isPrerelease == true) | [.tagName, .createdAt] | @tsv' \
-            | sort -t$'\t' -k1,1 \
-            | awk -F'\t' '
+            | sort -t$'\t' -k2,2r \
+            | awk -F'\t' -v protected="$PROTECTED" '
                 {
                   tag = $1
-                  # extract branch: everything after "--"
+                  if (tag == protected) next
                   if (match(tag, /--(.+)$/, m)) branch = m[1]
                   else branch = "unknown"
                   count[branch]++
-                  tags[branch, count[branch]] = tag
-                }
-                END {
-                  for (branch in count) {
-                    n = count[branch]
-                    for (i = 1; i <= n - 2; i++) {
-                      print tags[branch, i]
-                    }
-                  }
+                  if (count[branch] > 2) print tag
                 }
             ' \
             | while read -r tag; do
                 echo "[INFO] deleting release tag=${tag}"
                 gh release delete "$tag" --repo "$REPO" --yes --cleanup-tag || \
                   echo "[WARN] delete failed tag=${tag}"
+              done
+
+      - name: Delete orphaned tags without release
+        run: |
+          set -euo pipefail
+
+          PROTECTED="iso-latest"
+
+          gh api "repos/${REPO}/git/refs/tags" --paginate \
+            | jq -r '.[].ref | ltrimstr("refs/tags/")' \
+            | while read -r tag; do
+                [ "$tag" = "$PROTECTED" ] && continue
+                if ! gh release view "$tag" --repo "$REPO" > /dev/null 2>&1; then
+                  echo "[INFO] deleting orphaned tag=${tag}"
+                  gh api -X DELETE "repos/${REPO}/git/refs/tags/${tag}" || \
+                    echo "[WARN] delete failed tag=${tag}"
+                fi
               done
 
       - name: Delete old Actions artifacts (keep 2 per name+branch)
