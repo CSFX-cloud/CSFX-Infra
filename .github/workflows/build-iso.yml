@@ -20,8 +20,41 @@ permissions:
   contents: write
 
 jobs:
+  lint:
+    name: Format and lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Run nixpkgs-fmt
+        run: nix run nixpkgs#nixpkgs-fmt -- .
+
+      - name: Run statix
+        run: nix run nixpkgs#statix -- check .
+
+      - name: Commit formatting fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add -A
+            git commit -m "style: apply nixpkgs-fmt"
+            git push
+          fi
+
   build:
     name: ISO ${{ matrix.config }} (${{ matrix.arch }})
+    needs: lint
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
