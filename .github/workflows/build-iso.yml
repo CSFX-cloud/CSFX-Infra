@@ -103,8 +103,11 @@ jobs:
             *.iso *.sha256
 
           if [ "${BRANCH}" = "develop" ]; then
-            git tag -f iso-latest
-            git push origin iso-latest --force
+            SHA="${{ github.sha }}"
+            gh api -X PATCH "repos/${REPO}/git/refs/tags/iso-latest" \
+              -f sha="$SHA" -F force=true 2>/dev/null || \
+            gh api -X POST "repos/${REPO}/git/refs" \
+              -f ref="refs/tags/iso-latest" -f sha="$SHA"
           fi
 
           echo "## ISO Download URLs" >> $GITHUB_STEP_SUMMARY
