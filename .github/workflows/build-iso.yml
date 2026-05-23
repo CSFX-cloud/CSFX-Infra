@@ -149,8 +149,7 @@ jobs:
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           BRANCH="${{ steps.ver.outputs.branch }}"
-          BRANCH_SLUG=$(echo "$BRANCH" | sed 's|/|-|g')
-          TAG="iso-v${VERSION}--${BRANCH_SLUG}"
+          TAG="v${VERSION}"
           REPO="${{ github.repository }}"
           BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
@@ -158,18 +157,10 @@ jobs:
             gh release upload "${TAG}" --repo "$REPO" *.iso *.sha256 --clobber
           else
             gh release create "${TAG}" \
-              --title "ISO v${VERSION} (${BRANCH})" \
-              --notes "" \
+              --title "v${VERSION}" \
+              --notes "branch: ${BRANCH}" \
               --prerelease \
               *.iso *.sha256
-          fi
-
-          if [ "${BRANCH}" = "develop" ]; then
-            SHA="${{ github.sha }}"
-            gh api -X PATCH "repos/${REPO}/git/refs/tags/iso-latest" \
-              -f sha="$SHA" -F force=true 2>/dev/null || \
-            gh api -X POST "repos/${REPO}/git/refs" \
-              -f ref="refs/tags/iso-latest" -f sha="$SHA"
           fi
 
           echo "## ISO Download URLs" >> $GITHUB_STEP_SUMMARY

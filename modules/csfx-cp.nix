@@ -181,6 +181,7 @@ in
         type = lib.types.str;
         default = "/var/lib/csfx-updater/infra.git";
       };
+
     };
   };
 
