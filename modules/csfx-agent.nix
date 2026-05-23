@@ -33,6 +33,12 @@ in
       default = "";
       description = "Pre-registration token (leave empty to use bootstrap token)";
     };
+
+    enableSsh = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Configure sshd AuthorizedKeysCommand to fetch authorized keys from the CSFX gateway";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -90,6 +96,14 @@ in
         } // lib.optionalAttrs (cfg.registrationToken != "") {
           CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
         };
+      };
+    };
+
+    services.openssh = lib.mkIf cfg.enableSsh {
+      enable = true;
+      settings = {
+        AuthorizedKeysCommand = "${agentBin}/bin/csfx-agent --authorized-keys %u";
+        AuthorizedKeysCommandUser = "csfx-agent";
       };
     };
   };
