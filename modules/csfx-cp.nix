@@ -369,7 +369,7 @@ in
           after = [ "network-online.target" "etcd.service" ];
           wants = [ "network-online.target" ];
           requires = [ "etcd.service" ];
-          path = [ pkgs.git ];
+          path = [ pkgs.git pkgs.nixos-rebuild pkgs.nix ];
           serviceConfig = {
             ExecStart = "${updaterBin}/bin/csfx-updater";
             Restart = "on-failure";
