@@ -91,7 +91,7 @@ let
     ln -sfn "$MOUNT/csfx-updater" /var/lib/csfx-updater-data
   '';
 
-  logo = ''
+  logoFile = pkgs.writeText "csfx-logo" ''
      ██████╗███████╗███████╗██╗  ██╗
     ██╔════╝██╔════╝██╔════╝╚██╗██╔╝
     ██║     ███████╗█████╗   ╚███╔╝
@@ -148,7 +148,7 @@ in
             IP=$(${pkgs.iproute2}/bin/ip -4 addr show scope global 2>/dev/null \
               | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}' \
               | head -1)
-            printf '%s\n' '${logo}' > /run/csfx-issue
+            ${pkgs.coreutils}/bin/cp ${logoFile} /run/csfx-issue
             printf 'CSFX Node -- v${versions.csfx.version}\n' >> /run/csfx-issue
             printf 'IP: %s\n\n' "''${IP:-unknown}" >> /run/csfx-issue
           '';
