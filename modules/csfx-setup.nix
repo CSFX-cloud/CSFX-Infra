@@ -235,8 +235,8 @@ in
       };
 
       "getty@tty1" = {
-        after = [ "csfx-cp-ready.service" "csfx-update-issue.service" ];
-        wants = [ "csfx-cp-ready.service" "csfx-update-issue.service" ];
+        after = [ "csfx-update-issue.service" ];
+        requires = [ "csfx-update-issue.service" ];
         serviceConfig = {
           ExecStart = lib.mkForce "${pkgs.util-linux}/sbin/agetty --issue-file /run/csfx-issue --login-pause %I $TERM";
         };
