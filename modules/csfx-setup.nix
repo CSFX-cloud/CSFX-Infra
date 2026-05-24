@@ -148,9 +148,10 @@ in
             IP=$(${pkgs.iproute2}/bin/ip -4 addr show scope global 2>/dev/null \
               | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}' \
               | head -1)
-            ${pkgs.coreutils}/bin/cp ${logoFile} /run/csfx-issue
-            printf 'CSFX Node -- v${versions.csfx.version}\n' >> /run/csfx-issue
-            printf 'IP: %s\n\n' "''${IP:-unknown}" >> /run/csfx-issue
+            mkdir -p /run/issue.d
+            ${pkgs.coreutils}/bin/cp ${logoFile} /run/issue.d/00-csfx.issue
+            printf 'CSFX Node -- v${versions.csfx.version}\n' >> /run/issue.d/00-csfx.issue
+            printf 'IP: %s\n\n' "''${IP:-unknown}" >> /run/issue.d/00-csfx.issue
           '';
         };
       };
@@ -236,10 +237,7 @@ in
 
       "getty@tty1" = {
         after = [ "csfx-update-issue.service" ];
-        requires = [ "csfx-update-issue.service" ];
-        serviceConfig = {
-          ExecStart = lib.mkForce "${pkgs.util-linux}/sbin/agetty --issue-file /run/csfx-issue --login-pause %I $TERM";
-        };
+        wants = [ "csfx-update-issue.service" ];
       };
     };
   };
