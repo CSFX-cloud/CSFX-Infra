@@ -172,6 +172,12 @@ in
         default = "main";
       };
 
+      nixosConfig = lib.mkOption {
+        type = lib.types.str;
+        default = "csfx-node";
+        description = "nixosConfigurations attribute name in the flake to build and switch to";
+      };
+
       pollIntervalSecs = lib.mkOption {
         type = lib.types.int;
         default = 120;
@@ -384,6 +390,7 @@ in
             INFRA_REPO_BRANCH = cfg.updater.infraRepoBranch;
             INFRA_REPO_MIRROR_DIR = cfg.updater.mirrorDir;
             POLL_INTERVAL_SECS = toString cfg.updater.pollIntervalSecs;
+            NIXOS_CONFIG = cfg.updater.nixosConfig;
           };
         };
       };
