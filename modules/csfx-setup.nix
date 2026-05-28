@@ -134,9 +134,13 @@ in
       printf "Run 'csfx-status' for control plane overview.\n\n"
     '';
 
+    environment.etc."issue".text = "";
+
+    services.getty.extraArgs = [ "--issue-file" "/run/csfx-issue" ];
+
     systemd.services = {
       csfx-update-issue = {
-        description = "Write /etc/issue with IP after network is online";
+        description = "Write /run/csfx-issue with logo and IP after network is online";
         wantedBy = [ "multi-user.target" ];
         after = [ "network-online.target" ];
         wants = [ "network-online.target" ];
@@ -152,7 +156,7 @@ in
               ${pkgs.coreutils}/bin/cat ${logoFile}
               printf 'CSFX Node -- v${versions.csfx.version}\n'
               printf 'IP: %s\n\n' "''${IP:-unknown}"
-            } > /etc/issue
+            } > /run/csfx-issue
           '';
         };
       };
