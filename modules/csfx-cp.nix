@@ -380,8 +380,7 @@ in
             ExecStart = "${updaterBin}/bin/csfx-updater";
             Restart = "on-failure";
             RestartSec = "10s";
-            User = "csfx-updater";
-            Group = "csfx-updater";
+            User = "root";
           };
           environment = {
             ETCD_ENDPOINTS = cfg.etcdEndpoints;
