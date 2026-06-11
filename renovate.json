@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "onboarding": false,
+  "requireConfig": "optional",
+  "schedule": ["before 6am on monday"],
+  "timezone": "Europe/Zurich",
+  "labels": ["dependencies"],
+  "assignees": [],
+  "packageRules": [
+    {
+      "matchManagers": ["nix"],
+      "groupName": "Nix flake inputs",
+      "automerge": false
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "automerge": true,
+      "automergeType": "pr",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchDepNames": ["nixpkgs"],
+      "groupName": "nixpkgs channel",
+      "automerge": false
+    }
+  ],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/vendor/**"
+  ]
+}
