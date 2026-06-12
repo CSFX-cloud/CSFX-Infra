@@ -30,6 +30,20 @@ let
   hasUpdater = cp ? "csfx-updater";
   updaterBin = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
 
+  hasFrontend = v ? "frontend";
+  frontendAssets = if hasFrontend then pkgs.stdenv.mkDerivation {
+    pname = "csfx-frontend";
+    inherit (v) version;
+    src = pkgs.fetchurl {
+      inherit (v.frontend) url sha256;
+    };
+    dontUnpack = true;
+    installPhase = ''
+      mkdir -p $out
+      tar -xzf $src -C $out
+    '';
+  } else null;
+
   commonEnv = {
     DATABASE_URL = cfg.dbUrl;
     ETCD_ENDPOINTS = cfg.etcdEndpoints;
@@ -325,7 +339,7 @@ in
             FAILOVER_CONTROLLER_URL = "http://localhost:8004";
             SDN_CONTROLLER_URL = "http://localhost:8005";
             REGISTRY_SERVICE_URL = "http://localhost:8001";
-          };
+          } // (if hasFrontend then { STATIC_DIR = "${frontendAssets}"; } else {});
         };
 
         csfx-registry = mkService {
