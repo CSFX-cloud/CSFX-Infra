@@ -144,7 +144,7 @@ let
       printf "''${RED}unreachable''${RESET}\n"
     fi
     printf "api-gateway: "
-    if ${pkgs.curl}/bin/curl -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
+    if ${pkgs.curl}/bin/curl -sfk https://localhost:8000/api/public-key > /dev/null 2>&1; then
       printf "''${GREEN}healthy''${RESET}\n"
     else
       printf "''${RED}unreachable''${RESET}\n"
@@ -351,7 +351,7 @@ in
           binName = "registry";
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
-            API_GATEWAY_URL = "http://localhost:8000";
+            API_GATEWAY_URL = "https://localhost:8000";
           };
         };
 
@@ -407,6 +407,9 @@ in
             INFRA_REPO_MIRROR_DIR = cfg.updater.mirrorDir;
             POLL_INTERVAL_SECS = toString cfg.updater.pollIntervalSecs;
             NIXOS_CONFIG = cfg.updater.nixosConfig;
+            GATEWAY_URL = "https://localhost:8000";
+            HEALTH_CHECK_TIMEOUT_SECS = "120";
+            HEALTH_CHECK_RETRY_INTERVAL_SECS = "5";
           };
         };
       };

@@ -212,7 +212,6 @@ in
         description = "CSFX Control Plane readiness check";
         wantedBy = [ "multi-user.target" ];
         after = [ "csfx-api-gateway.service" ];
-        requires = [ "csfx-api-gateway.service" ];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
