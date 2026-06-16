@@ -224,7 +224,7 @@ in
             ELAPSED=0
 
             while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-              if "$CURL" -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
+              if "$CURL" -sfk https://localhost:8000/api/public-key > /dev/null 2>&1; then
                 echo "[INFO] control plane ready port=8000"
                 exit 0
               fi
