@@ -20,15 +20,20 @@ jobs:
           set -euo pipefail
 
           PROTECTED="iso-latest"
+          CUTOFF=$(date -u -d '24 hours ago' +%s)
 
           gh release list --repo "$REPO" --limit 200 \
             --json tagName,isPrerelease,createdAt \
             | jq -r '.[] | select(.isPrerelease == true) | [.tagName, .createdAt] | @tsv' \
             | sort -t$'\t' -k2,2r \
-            | awk -F'\t' -v protected="$PROTECTED" '
+            | awk -F'\t' -v protected="$PROTECTED" -v cutoff="$CUTOFF" '
                 {
                   tag = $1
                   if (tag == protected) next
+                  cmd = "date -u -d \"" $2 "\" +%s"
+                  cmd | getline ts
+                  close(cmd)
+                  if (ts + 0 >= cutoff + 0) next
                   if (match(tag, /--(.+)$/, m)) branch = m[1]
                   else branch = "unknown"
                   count[branch]++
@@ -46,11 +51,20 @@ jobs:
           set -euo pipefail
 
           PROTECTED="iso-latest"
+          CUTOFF=$(date -u -d '24 hours ago' +%s)
 
           gh api "repos/${REPO}/git/refs/tags" --paginate \
             | jq -r '.[].ref | ltrimstr("refs/tags/")' \
             | while read -r tag; do
                 [ "$tag" = "$PROTECTED" ] && continue
+                commit_date=$(gh api "repos/${REPO}/commits/$(
+                  gh api "repos/${REPO}/git/ref/tags/${tag}" \
+                    | jq -r '.object.sha'
+                )" 2>/dev/null | jq -r '.commit.committer.date // empty')
+                if [ -n "$commit_date" ]; then
+                  ts=$(date -u -d "$commit_date" +%s 2>/dev/null || echo 0)
+                  [ "$ts" -ge "$CUTOFF" ] && { echo "[INFO] skipping recent tag=${tag}"; continue; }
+                fi
                 if ! gh release view "$tag" --repo "$REPO" > /dev/null 2>&1; then
                   echo "[INFO] deleting orphaned tag=${tag}"
                   gh api -X DELETE "repos/${REPO}/git/refs/tags/${tag}" || \
@@ -62,6 +76,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          CUTOFF=$(date -u -d '24 hours ago' +%s)
+
           gh api "repos/${REPO}/actions/artifacts?per_page=100" --paginate \
             | jq -r '.artifacts[] | select(.expired == false) | [
                 (.id | tostring),
@@ -70,8 +86,12 @@ jobs:
                 .created_at
               ] | @tsv' \
             | sort -t$'\t' -k2,2 -k3,3 -k4,4r \
-            | awk -F'\t' '
+            | awk -F'\t' -v cutoff="$CUTOFF" '
                 {
+                  cmd = "date -u -d \"" $4 "\" +%s"
+                  cmd | getline ts
+                  close(cmd)
+                  if (ts + 0 >= cutoff + 0) next
                   key = $2 SUBSEP $3
                   count[key]++
                   if (count[key] > 2) print $1

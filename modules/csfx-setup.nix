@@ -91,7 +91,7 @@ let
     ln -sfn "$MOUNT/csfx-updater" /var/lib/csfx-updater-data
   '';
 
-  logo = ''
+  logoFile = pkgs.writeText "csfx-logo" ''
      ██████╗███████╗███████╗██╗  ██╗
     ██╔════╝██╔════╝██╔════╝╚██╗██╔╝
     ██║     ███████╗█████╗   ╚███╔╝
@@ -134,9 +134,13 @@ in
       printf "Run 'csfx-status' for control plane overview.\n\n"
     '';
 
+    environment.etc."issue".text = "";
+
+    services.getty.extraArgs = [ "--issue-file" "/run/csfx-issue" ];
+
     systemd.services = {
       csfx-update-issue = {
-        description = "Write /etc/issue with IP after network is online";
+        description = "Write /run/csfx-issue with logo and IP after network is online";
         wantedBy = [ "multi-user.target" ];
         after = [ "network-online.target" ];
         wants = [ "network-online.target" ];
@@ -148,9 +152,11 @@ in
             IP=$(${pkgs.iproute2}/bin/ip -4 addr show scope global 2>/dev/null \
               | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}' \
               | head -1)
-            printf '%s\n' '${logo}' > /run/csfx-issue
-            printf 'CSFX Node -- v${versions.csfx.version}\n' >> /run/csfx-issue
-            printf 'IP: %s\n\n' "''${IP:-unknown}" >> /run/csfx-issue
+            {
+              ${pkgs.coreutils}/bin/cat ${logoFile}
+              printf 'CSFX Node -- v${versions.csfx.version}\n'
+              printf 'IP: %s\n\n' "''${IP:-unknown}"
+            } > /run/csfx-issue
           '';
         };
       };
@@ -206,7 +212,6 @@ in
         description = "CSFX Control Plane readiness check";
         wantedBy = [ "multi-user.target" ];
         after = [ "csfx-api-gateway.service" ];
-        requires = [ "csfx-api-gateway.service" ];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
@@ -219,7 +224,7 @@ in
             ELAPSED=0
 
             while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-              if "$CURL" -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
+              if "$CURL" -sfk https://localhost:8000/api/public-key > /dev/null 2>&1; then
                 echo "[INFO] control plane ready port=8000"
                 exit 0
               fi
@@ -235,11 +240,8 @@ in
       };
 
       "getty@tty1" = {
-        after = [ "csfx-cp-ready.service" "csfx-update-issue.service" ];
-        wants = [ "csfx-cp-ready.service" "csfx-update-issue.service" ];
-        serviceConfig = {
-          ExecStart = lib.mkForce "${pkgs.util-linux}/sbin/agetty --issue-file /run/csfx-issue --login-pause %I $TERM";
-        };
+        after = [ "csfx-update-issue.service" ];
+        requires = [ "csfx-update-issue.service" ];
       };
     };
   };

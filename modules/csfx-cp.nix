@@ -30,6 +30,23 @@ let
   hasUpdater = cp ? "csfx-updater";
   updaterBin = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
 
+  hasFrontend = v ? "frontend";
+  frontendAssets =
+    if hasFrontend then
+      pkgs.stdenv.mkDerivation
+        {
+          pname = "csfx-frontend";
+          inherit (v) version;
+          src = pkgs.fetchurl {
+            inherit (v.frontend) url sha256;
+          };
+          dontUnpack = true;
+          installPhase = ''
+            mkdir -p $out
+            tar -xzf $src -C $out
+          '';
+        } else null;
+
   commonEnv = {
     DATABASE_URL = cfg.dbUrl;
     ETCD_ENDPOINTS = cfg.etcdEndpoints;
@@ -127,7 +144,7 @@ let
       printf "''${RED}unreachable''${RESET}\n"
     fi
     printf "api-gateway: "
-    if ${pkgs.curl}/bin/curl -sf http://localhost:8000/api/public-key > /dev/null 2>&1; then
+    if ${pkgs.curl}/bin/curl -sfk https://localhost:8000/api/public-key > /dev/null 2>&1; then
       printf "''${GREEN}healthy''${RESET}\n"
     else
       printf "''${RED}unreachable''${RESET}\n"
@@ -172,6 +189,12 @@ in
         default = "main";
       };
 
+      nixosConfig = lib.mkOption {
+        type = lib.types.str;
+        default = "csfx-node";
+        description = "nixosConfigurations attribute name in the flake to build and switch to";
+      };
+
       pollIntervalSecs = lib.mkOption {
         type = lib.types.int;
         default = 120;
@@ -181,6 +204,7 @@ in
         type = lib.types.str;
         default = "/var/lib/csfx-updater/infra.git";
       };
+
     };
   };
 
@@ -318,7 +342,7 @@ in
             FAILOVER_CONTROLLER_URL = "http://localhost:8004";
             SDN_CONTROLLER_URL = "http://localhost:8005";
             REGISTRY_SERVICE_URL = "http://localhost:8001";
-          };
+          } // (if hasFrontend then { STATIC_DIR = "${frontendAssets}"; } else { });
         };
 
         csfx-registry = mkService {
@@ -327,7 +351,7 @@ in
           binName = "registry";
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
-            API_GATEWAY_URL = "http://localhost:8000";
+            API_GATEWAY_URL = "https://localhost:8000";
           };
         };
 
@@ -368,13 +392,12 @@ in
           after = [ "network-online.target" "etcd.service" ];
           wants = [ "network-online.target" ];
           requires = [ "etcd.service" ];
-          path = [ pkgs.git ];
+          path = [ pkgs.git pkgs.nixos-rebuild pkgs.nix ];
           serviceConfig = {
             ExecStart = "${updaterBin}/bin/csfx-updater";
             Restart = "on-failure";
             RestartSec = "10s";
-            User = "csfx-updater";
-            Group = "csfx-updater";
+            User = "root";
           };
           environment = {
             ETCD_ENDPOINTS = cfg.etcdEndpoints;
@@ -383,6 +406,10 @@ in
             INFRA_REPO_BRANCH = cfg.updater.infraRepoBranch;
             INFRA_REPO_MIRROR_DIR = cfg.updater.mirrorDir;
             POLL_INTERVAL_SECS = toString cfg.updater.pollIntervalSecs;
+            NIXOS_CONFIG = cfg.updater.nixosConfig;
+            GATEWAY_URL = "https://localhost:8000";
+            HEALTH_CHECK_TIMEOUT_SECS = "120";
+            HEALTH_CHECK_RETRY_INTERVAL_SECS = "5";
           };
         };
       };
