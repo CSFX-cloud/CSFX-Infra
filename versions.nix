@@ -95,7 +95,7 @@
     };
     frontend = {
       url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.568/csfx-frontend.tar.gz";
-      sha256 = "fd85e16f38eae74765cce0c4c48fc40f3d14b3a54a71899cb95b076fa3869062";
+      sha256 = "066924e2096262f7dd30149df44a5117b0bda556912e4c9c8ec27a3250cd48ff";
     };
   };
 }
