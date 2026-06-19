@@ -212,15 +212,17 @@ in
         description = "CSFX Control Plane readiness check";
         wantedBy = [ "multi-user.target" ];
         after = [ "csfx-api-gateway.service" ];
+        requires = [ "csfx-api-gateway.service" ];
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
+          TimeoutStartSec = 360;
           User = "root";
           ExecStart = pkgs.writeShellScript "csfx-cp-ready" ''
             set -euo pipefail
 
             CURL=${pkgs.curl}/bin/curl
-            TIMEOUT=120
+            TIMEOUT=300
             ELAPSED=0
 
             while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
