@@ -112,7 +112,7 @@ jobs:
           cp "${ISO_PATH}" "${OUTNAME}"
           sha256sum "${OUTNAME}" > "${OUTNAME}.sha256"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.config }}-${{ matrix.arch }}
           path: |
@@ -130,7 +130,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: csfx-*
           merge-multiple: true
@@ -178,7 +178,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: csfx-*
           merge-multiple: true
