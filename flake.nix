@@ -63,7 +63,7 @@
         services = {
           csfx-agent = {
             enable = true;
-            gatewayUrl = "http://localhost:8000";
+            gatewayUrl = "https://localhost:8000";
           };
           csfx-cp = {
             enable = true;

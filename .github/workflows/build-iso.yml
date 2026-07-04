@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - develop
       - "feat/**"
       - "fix/**"
       - "chore/**"
@@ -120,11 +119,30 @@ jobs:
             ${{ matrix.config }}-${{ matrix.arch }}.iso.sha256
           retention-days: 3
 
+  version-check:
+    name: Resolve release channel
+    runs-on: ubuntu-latest
+    needs: build
+    outputs:
+      is_full_release: ${{ steps.channel.outputs.is_full_release }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Determine release channel
+        id: channel
+        run: |
+          VERSION=$(grep -m1 'version' versions.nix | sed 's/[^"]*"\([^"]*\)".*/\1/')
+          if [[ "${{ github.ref }}" == "refs/heads/main" && ! "$VERSION" =~ -(alpha|beta|rc)\. ]]; then
+            echo "is_full_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_full_release=false" >> $GITHUB_OUTPUT
+          fi
+
   release-dev:
     name: Publish dev ISOs
     runs-on: ubuntu-latest
-    needs: build
-    if: github.ref != 'refs/heads/main'
+    needs: version-check
+    if: needs.version-check.outputs.is_full_release == 'false'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -173,8 +191,8 @@ jobs:
   release:
     name: Publish ISOs to Release
     runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
+    needs: version-check
+    if: needs.version-check.outputs.is_full_release == 'true'
     steps:
       - uses: actions/checkout@v7
 
@@ -186,7 +204,7 @@ jobs:
       - name: Determine version
         id: ver
         run: |
-          VERSION=$(grep 'version' versions.nix | head -1 | sed 's/.*"\(.*\)"/\1/')
+          VERSION=$(grep -m1 'version' versions.nix | sed 's/[^"]*"\([^"]*\)".*/\1/')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Upload to release

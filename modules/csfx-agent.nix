@@ -42,6 +42,21 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    virtualisation.docker = {
+      enable = lib.mkDefault true;
+      enableOnBoot = lib.mkDefault false;
+    };
+
+    security.polkit.extraConfig = ''
+      polkit.addRule(function(action, subject) {
+        if (action.id == "org.freedesktop.systemd1.manage-units" &&
+            action.lookup("unit") == "docker.service" &&
+            subject.user == "csfx-agent") {
+          return polkit.Result.YES;
+        }
+      });
+    '';
+
     users = {
       users = {
         csfx-agent = {
