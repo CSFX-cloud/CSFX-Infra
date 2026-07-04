@@ -204,7 +204,7 @@ jobs:
       - name: Determine version
         id: ver
         run: |
-          VERSION=$(grep 'version' versions.nix | head -1 | sed 's/.*"\(.*\)"/\1/')
+          VERSION=$(grep -m1 'version' versions.nix | sed 's/[^"]*"\([^"]*\)".*/\1/')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Upload to release
