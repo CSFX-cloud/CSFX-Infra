@@ -47,6 +47,8 @@ in
       enableOnBoot = lib.mkDefault false;
     };
 
+    boot.kernelModules = [ "wireguard" ];
+
     security.polkit.extraConfig = ''
       polkit.addRule(function(action, subject) {
         if (action.id == "org.freedesktop.systemd1.manage-units" &&
@@ -91,6 +93,8 @@ in
         after = [ "network-online.target" "csfx-cp-ready.service" ];
         wants = [ "network-online.target" "csfx-cp-ready.service" ];
 
+        path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 ];
+
         serviceConfig = {
           ExecStart = "${agentBin}/bin/csfx-agent";
           User = "csfx-agent";
@@ -101,7 +105,8 @@ in
           ProtectSystem = "strict";
           ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ];
           NoNewPrivileges = true;
-          CapabilityBoundingSet = "";
+          CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" ];
+          AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" ];
         };
 
         environment = {
