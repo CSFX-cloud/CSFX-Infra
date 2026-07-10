@@ -39,6 +39,18 @@ in
       default = false;
       description = "Configure sshd AuthorizedKeysCommand to fetch authorized keys from the CSFX gateway";
     };
+
+    enableFirecracker = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Enable Firecracker microVM workload support (requires KVM)";
+    };
+
+    guestKernelPath = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to the uncompressed guest kernel image (vmlinux) used to boot microVMs";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -46,6 +58,13 @@ in
       enable = lib.mkDefault true;
       enableOnBoot = lib.mkDefault false;
     };
+
+    boot.kernelModules = [ "wireguard" ]
+      ++ lib.optionals cfg.enableFirecracker [ "kvm" "kvm-intel" "kvm-amd" "tun" "vhost_net" ];
+
+    services.udev.extraRules = lib.mkIf cfg.enableFirecracker ''
+      KERNEL=="kvm", GROUP="kvm", MODE="0660"
+    '';
 
     security.polkit.extraConfig = ''
       polkit.addRule(function(action, subject) {
@@ -64,6 +83,7 @@ in
           group = "csfx-agent";
           home = "/var/lib/csfx-agent";
           createHome = true;
+          extraGroups = lib.optionals cfg.enableFirecracker [ "kvm" ];
         };
         csfx-updater = {
           isSystemUser = true;
@@ -91,6 +111,9 @@ in
         after = [ "network-online.target" "csfx-cp-ready.service" ];
         wants = [ "network-online.target" "csfx-cp-ready.service" ];
 
+        path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 ]
+          ++ lib.optionals cfg.enableFirecracker [ pkgs.firecracker ];
+
         serviceConfig = {
           ExecStart = "${agentBin}/bin/csfx-agent";
           User = "csfx-agent";
@@ -101,7 +124,10 @@ in
           ProtectSystem = "strict";
           ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ];
           NoNewPrivileges = true;
-          CapabilityBoundingSet = "";
+          CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" ]
+            ++ lib.optionals cfg.enableFirecracker [ "CAP_SYS_ADMIN" "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
+          AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" ]
+            ++ lib.optionals cfg.enableFirecracker [ "CAP_SYS_ADMIN" "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
         };
 
         environment = {
@@ -109,6 +135,17 @@ in
           CSFX_HEARTBEAT_INTERVAL = toString cfg.heartbeatInterval;
         } // lib.optionalAttrs (cfg.registrationToken != "") {
           CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
+        };
+      };
+
+      services.csfx-guest-kernel-link = lib.mkIf (cfg.enableFirecracker && cfg.guestKernelPath != null) {
+        description = "Link CSFX guest kernel image into agent state directory";
+        wantedBy = [ "csfx-agent.service" ];
+        before = [ "csfx-agent.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${pkgs.coreutils}/bin/ln -sf ${cfg.guestKernelPath} /var/lib/csfx-agent/vmlinux";
         };
       };
     };
