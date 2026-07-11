@@ -51,6 +51,24 @@ in
       default = null;
       description = "Path to the uncompressed guest kernel image (vmlinux) used to boot microVMs";
     };
+
+    cephMonHosts = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "Comma-separated Ceph monitor hosts (e.g. ceph-mon1:6789,ceph-mon2:6789). Leave empty to disable RBD volume support.";
+    };
+
+    cephClientName = lib.mkOption {
+      type = lib.types.str;
+      default = "admin";
+      description = "Ceph client name used for RBD authentication";
+    };
+
+    cephKeyringPath = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to the Ceph client keyring file for this node";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -70,6 +88,11 @@ in
       polkit.addRule(function(action, subject) {
         if (action.id == "org.freedesktop.systemd1.manage-units" &&
             action.lookup("unit") == "docker.service" &&
+            subject.user == "csfx-agent") {
+          return polkit.Result.YES;
+        }
+        if ((action.id == "org.freedesktop.login1.reboot" ||
+             action.id == "org.freedesktop.login1.power-off") &&
             subject.user == "csfx-agent") {
           return polkit.Result.YES;
         }
@@ -104,6 +127,8 @@ in
         "d /var/lib/csfx-updater 0750 csfx-updater csfx-updater -"
         "f /var/lib/csfx/update_trigger 0660 csfx-agent csfx-updater -"
         "d /var/lib/csfx 0750 csfx-agent csfx-updater -"
+      ] ++ lib.optionals (cfg.cephMonHosts != "") [
+        "d /mnt/csfx-volumes 0750 csfx-agent csfx-agent -"
       ];
       services.csfx-agent = {
         description = "CSFX Agent";
@@ -111,8 +136,9 @@ in
         after = [ "network-online.target" "csfx-cp-ready.service" ];
         wants = [ "network-online.target" "csfx-cp-ready.service" ];
 
-        path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 ]
-          ++ lib.optionals cfg.enableFirecracker [ pkgs.firecracker ];
+        path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 pkgs.util-linux ]
+          ++ lib.optionals cfg.enableFirecracker [ pkgs.firecracker ]
+          ++ lib.optionals (cfg.cephMonHosts != "") [ pkgs.ceph-client ];
 
         serviceConfig = {
           ExecStart = "${agentBin}/bin/csfx-agent";
@@ -122,12 +148,13 @@ in
           RestartSec = "10s";
           PrivateTmp = true;
           ProtectSystem = "strict";
-          ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ];
+          ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ]
+            ++ lib.optionals (cfg.cephMonHosts != "") [ "/mnt/csfx-volumes" ];
           NoNewPrivileges = true;
-          CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" ]
-            ++ lib.optionals cfg.enableFirecracker [ "CAP_SYS_ADMIN" "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
-          AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" ]
-            ++ lib.optionals cfg.enableFirecracker [ "CAP_SYS_ADMIN" "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
+          CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
+            ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
+          AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
+            ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
         };
 
         environment = {
@@ -135,6 +162,11 @@ in
           CSFX_HEARTBEAT_INTERVAL = toString cfg.heartbeatInterval;
         } // lib.optionalAttrs (cfg.registrationToken != "") {
           CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
+        } // lib.optionalAttrs (cfg.cephMonHosts != "") {
+          CEPH_MON_HOSTS = cfg.cephMonHosts;
+          CEPH_CLIENT_NAME = cfg.cephClientName;
+        } // lib.optionalAttrs (cfg.cephKeyringPath != null) {
+          CEPH_KEYRING = toString cfg.cephKeyringPath;
         };
       };
 
