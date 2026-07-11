@@ -91,6 +91,11 @@ in
             subject.user == "csfx-agent") {
           return polkit.Result.YES;
         }
+        if ((action.id == "org.freedesktop.login1.reboot" ||
+             action.id == "org.freedesktop.login1.power-off") &&
+            subject.user == "csfx-agent") {
+          return polkit.Result.YES;
+        }
       });
     '';
 
