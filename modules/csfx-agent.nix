@@ -83,6 +83,8 @@ in
       enableOnBoot = lib.mkDefault false;
     };
 
+    environment.systemPackages = [ pkgs.wireguard-tools pkgs.iproute2 ];
+
     boot.kernelModules = [ "wireguard" ]
       ++ lib.optionals cfg.enableFirecracker [ "kvm" "kvm-intel" "kvm-amd" "tun" "vhost_net" ];
 

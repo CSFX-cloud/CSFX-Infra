@@ -24,6 +24,7 @@
         self.nixosModules.csfx-cp
         self.nixosModules.csfx-setup
         self.nixosModules.csfx-binary-cache
+        self.nixosModules.csfx-dev-ssh
         self.nixosModules.update-units
       ];
 
@@ -83,6 +84,7 @@
             dataPart = "/dev/disk/by-label/csfx-data";
           };
           csfx-binary-cache.enable = true;
+          csfx-dev-ssh.enable = true;
           csfx-update-units = {
             enable = true;
             nixCacheUrl = "http://localhost:5000";
@@ -124,6 +126,7 @@
         csfx-binary-cache = import ./modules/csfx-binary-cache.nix;
         csfx-setup = import ./modules/csfx-setup.nix;
         csfx-autoinstall = import ./modules/csfx-autoinstall.nix;
+        csfx-dev-ssh = import ./modules/csfx-dev-ssh.nix;
         update-units = import ./modules/update-units.nix;
       };
 
