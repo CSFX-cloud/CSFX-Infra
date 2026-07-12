@@ -127,7 +127,7 @@ in
           group = "csfx-agent";
           home = "/var/lib/csfx-agent";
           createHome = true;
-          extraGroups = lib.optionals cfg.enableFirecracker [ "kvm" ];
+          extraGroups = [ "docker" ] ++ lib.optionals cfg.enableFirecracker [ "kvm" ];
         };
         csfx-updater = {
           isSystemUser = true;
