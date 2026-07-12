@@ -30,6 +30,9 @@
       nodeConfig = nixosConfig: _: {
         system.stateVersion = "25.05";
 
+        console.keyMap = "de";
+        services.qemuGuest.enable = true;
+
         networking.nameservers = [ "1.1.1.1" "9.9.9.9" ];
 
         fileSystems."/" = { device = "/dev/disk/by-label/nixos"; fsType = "ext4"; };
@@ -91,6 +94,8 @@
 
       isoConfig = _installedSys: isoFileName: { lib, ... }: {
         system.stateVersion = "25.05";
+        console.keyMap = "de";
+        services.qemuGuest.enable = true;
         services.csfx-autoinstall = {
           enable = true;
           disk = "auto";
