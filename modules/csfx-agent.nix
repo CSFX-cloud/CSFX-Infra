@@ -34,6 +34,12 @@ in
       description = "Pre-registration token (leave empty to use bootstrap token)";
     };
 
+    wgEndpoint = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "WireGuard endpoint (host:port) this agent is reachable at for VPN/tunnel peering. Required for VPN and node-reboot features.";
+    };
+
     enableSsh = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -162,6 +168,8 @@ in
           CSFX_HEARTBEAT_INTERVAL = toString cfg.heartbeatInterval;
         } // lib.optionalAttrs (cfg.registrationToken != "") {
           CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
+        } // lib.optionalAttrs (cfg.wgEndpoint != null) {
+          CSFX_WG_ENDPOINT = cfg.wgEndpoint;
         } // lib.optionalAttrs (cfg.cephMonHosts != "") {
           CEPH_MON_HOSTS = cfg.cephMonHosts;
           CEPH_CLIENT_NAME = cfg.cephClientName;
