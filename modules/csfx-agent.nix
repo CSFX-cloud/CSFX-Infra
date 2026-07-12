@@ -40,6 +40,12 @@ in
       description = "WireGuard endpoint (host:port) this agent is reachable at for VPN/tunnel peering. Required for VPN and node-reboot features.";
     };
 
+    agentPort = lib.mkOption {
+      type = lib.types.port;
+      default = 7443;
+      description = "Port the agent's inbound HTTP server (logs, exec, power, metrics stream) listens on. Must match the port the control plane uses to reach this agent over the management tunnel.";
+    };
+
     enableSsh = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -84,6 +90,11 @@ in
     };
 
     environment.systemPackages = [ pkgs.wireguard-tools pkgs.iproute2 ];
+
+    networking.firewall = {
+      allowedUDPPorts = [ 51820 ];
+      interfaces."wgmgmt0".allowedTCPPorts = [ cfg.agentPort ];
+    };
 
     boot.kernelModules = [ "wireguard" ]
       ++ lib.optionals cfg.enableFirecracker [ "kvm" "kvm-intel" "kvm-amd" "tun" "vhost_net" ];
@@ -168,6 +179,7 @@ in
         environment = {
           CSFX_GATEWAY_URL = cfg.gatewayUrl;
           CSFX_HEARTBEAT_INTERVAL = toString cfg.heartbeatInterval;
+          CSFX_AGENT_PORT = toString cfg.agentPort;
         } // lib.optionalAttrs (cfg.registrationToken != "") {
           CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
         } // lib.optionalAttrs (cfg.wgEndpoint != null) {
