@@ -10,7 +10,7 @@ in
 
   config = lib.mkIf cfg.enable {
     services.openssh = {
-      enable = lib.mkForce true;
+      enable = lib.mkOverride 40 true;
       settings = {
         PermitRootLogin = lib.mkForce "yes";
         PasswordAuthentication = lib.mkForce true;
