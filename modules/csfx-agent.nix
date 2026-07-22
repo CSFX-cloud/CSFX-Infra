@@ -107,8 +107,9 @@ in
 
     security.polkit.extraConfig = ''
       polkit.addRule(function(action, subject) {
+        var managedUnits = ["docker.service", "reboot.target", "poweroff.target"];
         if (action.id == "org.freedesktop.systemd1.manage-units" &&
-            action.lookup("unit") == "docker.service" &&
+            managedUnits.indexOf(action.lookup("unit")) !== -1 &&
             subject.user == "csfx-agent") {
           return polkit.Result.YES;
         }
