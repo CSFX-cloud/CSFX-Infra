@@ -52,7 +52,7 @@ let
     ETCD_ENDPOINTS = cfg.etcdEndpoints;
   };
 
-  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1" }: {
+  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null }: {
     inherit description;
     after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
     requires = [ "csfx-migrate.service" ] ++ requires;
@@ -63,6 +63,8 @@ let
       RestartSec = "5s";
       DynamicUser = true;
       EnvironmentFile = cfg.envFile;
+    } // lib.optionalAttrs (stateDirectory != null) {
+      StateDirectory = stateDirectory;
     };
     environment = commonEnv // extraEnv // { LISTEN_ADDR = listenAddr; };
   };
@@ -336,6 +338,9 @@ in
           bin = gatewayBin;
           binName = "api-gateway";
           listenAddr = "0.0.0.0";
+          stateDirectory = "csfx-cp";
+          after = [ "csfx-registry.service" ];
+          requires = [ "csfx-registry.service" ];
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             VOLUME_MANAGER_URL = "http://localhost:8003";
@@ -349,6 +354,7 @@ in
           description = "CSFX Registry";
           bin = registryBin;
           binName = "registry";
+          stateDirectory = "csfx-cp";
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             API_GATEWAY_URL = "https://localhost:8000";
