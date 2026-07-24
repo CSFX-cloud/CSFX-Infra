@@ -133,6 +133,15 @@ in
             subject.user == "csfx-agent") {
           return polkit.Result.YES;
         }
+        ${lib.optionalString cfg.enableFirecracker ''
+        if ((action.id == "org.freedesktop.systemd1.manage-units" ||
+             action.id == "org.freedesktop.systemd1.manage-unit-files") &&
+            action.lookup("unit") != null &&
+            action.lookup("unit").indexOf("csfx-jailer-") == 0 &&
+            subject.user == "csfx-agent") {
+          return polkit.Result.YES;
+        }
+        ''}
       });
     '';
 
@@ -188,11 +197,9 @@ in
             ProtectSystem = "strict";
             ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ]
               ++ lib.optionals (cfg.cephMonHosts != "") [ "/mnt/csfx-volumes" ];
-            NoNewPrivileges = !cfg.enableFirecracker;
-            CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
-              ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" "CAP_SETUID" "CAP_SETGID" "CAP_SYS_CHROOT" ];
-            AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
-              ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" "CAP_SETUID" "CAP_SETGID" "CAP_SYS_CHROOT" ];
+            NoNewPrivileges = true;
+            CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ];
+            AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ];
           };
 
           environment = {
