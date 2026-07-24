@@ -208,6 +208,8 @@ in
             CEPH_CLIENT_NAME = cfg.cephClientName;
           } // lib.optionalAttrs (cfg.cephKeyringPath != null) {
             CEPH_KEYRING = toString cfg.cephKeyringPath;
+          } // lib.optionalAttrs cfg.enableFirecracker {
+            CSFX_FIRECRACKER_BIN_PATH = "${pkgs.firecracker}/bin/firecracker";
           };
         };
 
