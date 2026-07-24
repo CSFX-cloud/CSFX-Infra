@@ -188,11 +188,11 @@ in
             ProtectSystem = "strict";
             ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ]
               ++ lib.optionals (cfg.cephMonHosts != "") [ "/mnt/csfx-volumes" ];
-            NoNewPrivileges = true;
+            NoNewPrivileges = !cfg.enableFirecracker;
             CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
-              ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
+              ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" "CAP_SETUID" "CAP_SETGID" "CAP_SYS_CHROOT" ];
             AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
-              ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
+              ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" "CAP_SETUID" "CAP_SETGID" "CAP_SYS_CHROOT" ];
           };
 
           environment = {
