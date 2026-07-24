@@ -12,6 +12,16 @@ let
     cp ${agentSrc} $out/bin/csfx-agent
     chmod +x $out/bin/csfx-agent
   '';
+
+  guestInitSrc = pkgs.fetchurl {
+    inherit (versions.csfx.guestInit.${arch}) url sha256;
+  };
+
+  guestInitBin = pkgs.runCommand "csfx-guest-init" { } ''
+    mkdir -p $out/bin
+    cp ${guestInitSrc} $out/bin/csfx-guest-init
+    chmod +x $out/bin/csfx-guest-init
+  '';
 in
 {
   options.services.csfx-agent = {
@@ -203,6 +213,17 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           ExecStart = "${pkgs.coreutils}/bin/ln -sf ${cfg.guestKernelPath} /var/lib/csfx-agent/vmlinux";
+        };
+      };
+
+      services.csfx-guest-init-link = lib.mkIf cfg.enableFirecracker {
+        description = "Link CSFX guest-init binary into agent state directory";
+        wantedBy = [ "csfx-agent.service" ];
+        before = [ "csfx-agent.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${pkgs.coreutils}/bin/ln -sf ${guestInitBin}/bin/csfx-guest-init /var/lib/csfx-agent/csfx-guest-init";
         };
       };
     };

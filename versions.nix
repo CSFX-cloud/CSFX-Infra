@@ -11,6 +11,17 @@
         sha256 = "07a13c2e4fdcdc19f331f1e791b9e0a0c2f86b9bfef0c65b0733eb8bb51805a1";
       };
     };
+    # PLACEHOLDER: replace after next release-build.yml run publishes real csfx-guest-init artifacts.
+    guestInit = {
+      amd64 = {
+        url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.647/csfx-guest-init-amd64";
+        sha256 = "0000000000000000000000000000000000000000000000000000000000000";
+      };
+      arm64 = {
+        url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.647/csfx-guest-init-arm64";
+        sha256 = "0000000000000000000000000000000000000000000000000000000000000";
+      };
+    };
     controlPlane = {
       migrate = {
         amd64 = {
