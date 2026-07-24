@@ -174,7 +174,7 @@ in
           after = [ "network-online.target" "csfx-cp-ready.service" ];
           wants = [ "network-online.target" "csfx-cp-ready.service" ];
 
-          path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 pkgs.util-linux ]
+          path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 pkgs.util-linux pkgs.coredns ]
             ++ lib.optionals cfg.enableFirecracker [ pkgs.firecracker pkgs.e2fsprogs ]
             ++ lib.optionals (cfg.cephMonHosts != "") [ pkgs.ceph-client ];
 
