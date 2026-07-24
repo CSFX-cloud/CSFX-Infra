@@ -184,7 +184,7 @@ in
           wants = [ "network-online.target" "csfx-cp-ready.service" ];
 
           path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 pkgs.util-linux pkgs.coredns ]
-            ++ lib.optionals cfg.enableFirecracker [ pkgs.firecracker pkgs.e2fsprogs ]
+            ++ lib.optionals cfg.enableFirecracker [ pkgs.pkgsStatic.firecracker pkgs.e2fsprogs ]
             ++ lib.optionals (cfg.cephMonHosts != "") [ pkgs.ceph-client ];
 
           serviceConfig = {
@@ -216,7 +216,7 @@ in
           } // lib.optionalAttrs (cfg.cephKeyringPath != null) {
             CEPH_KEYRING = toString cfg.cephKeyringPath;
           } // lib.optionalAttrs cfg.enableFirecracker {
-            CSFX_FIRECRACKER_BIN_PATH = "${pkgs.firecracker}/bin/firecracker";
+            CSFX_FIRECRACKER_BIN_PATH = "${pkgs.pkgsStatic.firecracker}/bin/firecracker";
           };
         };
 
