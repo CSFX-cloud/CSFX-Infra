@@ -162,68 +162,70 @@ in
       ] ++ lib.optionals (cfg.cephMonHosts != "") [
         "d /mnt/csfx-volumes 0750 csfx-agent csfx-agent -"
       ];
-      services.csfx-agent = {
-        description = "CSFX Agent";
-        wantedBy = [ "multi-user.target" ];
-        after = [ "network-online.target" "csfx-cp-ready.service" ];
-        wants = [ "network-online.target" "csfx-cp-ready.service" ];
+      services = {
+        csfx-agent = {
+          description = "CSFX Agent";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "network-online.target" "csfx-cp-ready.service" ];
+          wants = [ "network-online.target" "csfx-cp-ready.service" ];
 
-        path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 pkgs.util-linux ]
-          ++ lib.optionals cfg.enableFirecracker [ pkgs.firecracker ]
-          ++ lib.optionals (cfg.cephMonHosts != "") [ pkgs.ceph-client ];
+          path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 pkgs.util-linux ]
+            ++ lib.optionals cfg.enableFirecracker [ pkgs.firecracker ]
+            ++ lib.optionals (cfg.cephMonHosts != "") [ pkgs.ceph-client ];
 
-        serviceConfig = {
-          ExecStart = "${agentBin}/bin/csfx-agent";
-          User = "csfx-agent";
-          Group = "csfx-agent";
-          Restart = "on-failure";
-          RestartSec = "10s";
-          PrivateTmp = true;
-          ProtectSystem = "strict";
-          ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ]
-            ++ lib.optionals (cfg.cephMonHosts != "") [ "/mnt/csfx-volumes" ];
-          NoNewPrivileges = true;
-          CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
-            ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
-          AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
-            ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
+          serviceConfig = {
+            ExecStart = "${agentBin}/bin/csfx-agent";
+            User = "csfx-agent";
+            Group = "csfx-agent";
+            Restart = "on-failure";
+            RestartSec = "10s";
+            PrivateTmp = true;
+            ProtectSystem = "strict";
+            ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ]
+              ++ lib.optionals (cfg.cephMonHosts != "") [ "/mnt/csfx-volumes" ];
+            NoNewPrivileges = true;
+            CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
+              ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
+            AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" ]
+              ++ lib.optionals cfg.enableFirecracker [ "CAP_MKNOD" "CAP_SETPCAP" "CAP_CHOWN" ];
+          };
+
+          environment = {
+            CSFX_GATEWAY_URL = cfg.gatewayUrl;
+            CSFX_HEARTBEAT_INTERVAL = toString cfg.heartbeatInterval;
+            CSFX_AGENT_PORT = toString cfg.agentPort;
+          } // lib.optionalAttrs (cfg.registrationToken != "") {
+            CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
+          } // lib.optionalAttrs (cfg.wgEndpoint != null) {
+            CSFX_WG_ENDPOINT = cfg.wgEndpoint;
+          } // lib.optionalAttrs (cfg.cephMonHosts != "") {
+            CEPH_MON_HOSTS = cfg.cephMonHosts;
+            CEPH_CLIENT_NAME = cfg.cephClientName;
+          } // lib.optionalAttrs (cfg.cephKeyringPath != null) {
+            CEPH_KEYRING = toString cfg.cephKeyringPath;
+          };
         };
 
-        environment = {
-          CSFX_GATEWAY_URL = cfg.gatewayUrl;
-          CSFX_HEARTBEAT_INTERVAL = toString cfg.heartbeatInterval;
-          CSFX_AGENT_PORT = toString cfg.agentPort;
-        } // lib.optionalAttrs (cfg.registrationToken != "") {
-          CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
-        } // lib.optionalAttrs (cfg.wgEndpoint != null) {
-          CSFX_WG_ENDPOINT = cfg.wgEndpoint;
-        } // lib.optionalAttrs (cfg.cephMonHosts != "") {
-          CEPH_MON_HOSTS = cfg.cephMonHosts;
-          CEPH_CLIENT_NAME = cfg.cephClientName;
-        } // lib.optionalAttrs (cfg.cephKeyringPath != null) {
-          CEPH_KEYRING = toString cfg.cephKeyringPath;
+        csfx-guest-kernel-link = lib.mkIf (cfg.enableFirecracker && cfg.guestKernelPath != null) {
+          description = "Link CSFX guest kernel image into agent state directory";
+          wantedBy = [ "csfx-agent.service" ];
+          before = [ "csfx-agent.service" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${pkgs.coreutils}/bin/ln -sf ${cfg.guestKernelPath} /var/lib/csfx-agent/vmlinux";
+          };
         };
-      };
 
-      services.csfx-guest-kernel-link = lib.mkIf (cfg.enableFirecracker && cfg.guestKernelPath != null) {
-        description = "Link CSFX guest kernel image into agent state directory";
-        wantedBy = [ "csfx-agent.service" ];
-        before = [ "csfx-agent.service" ];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          ExecStart = "${pkgs.coreutils}/bin/ln -sf ${cfg.guestKernelPath} /var/lib/csfx-agent/vmlinux";
-        };
-      };
-
-      services.csfx-guest-init-link = lib.mkIf cfg.enableFirecracker {
-        description = "Link CSFX guest-init binary into agent state directory";
-        wantedBy = [ "csfx-agent.service" ];
-        before = [ "csfx-agent.service" ];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          ExecStart = "${pkgs.coreutils}/bin/ln -sf ${guestInitBin}/bin/csfx-guest-init /var/lib/csfx-agent/csfx-guest-init";
+        csfx-guest-init-link = lib.mkIf cfg.enableFirecracker {
+          description = "Link CSFX guest-init binary into agent state directory";
+          wantedBy = [ "csfx-agent.service" ];
+          before = [ "csfx-agent.service" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${pkgs.coreutils}/bin/ln -sf ${guestInitBin}/bin/csfx-guest-init /var/lib/csfx-agent/csfx-guest-init";
+          };
         };
       };
     };
