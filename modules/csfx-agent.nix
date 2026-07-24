@@ -22,6 +22,10 @@ let
     cp ${guestInitSrc} $out/bin/csfx-guest-init
     chmod +x $out/bin/csfx-guest-init
   '';
+
+  defaultGuestKernel = pkgs.fetchurl {
+    inherit (versions.firecrackerGuestKernel.${arch}) url sha256;
+  };
 in
 {
   options.services.csfx-agent = {
@@ -69,9 +73,10 @@ in
     };
 
     guestKernelPath = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default = null;
-      description = "Path to the uncompressed guest kernel image (vmlinux) used to boot microVMs";
+      type = lib.types.path;
+      default = defaultGuestKernel;
+      defaultText = lib.literalExpression "fetched Firecracker CI guest kernel for the host architecture";
+      description = "Path to the uncompressed guest kernel image (vmlinux) used to boot microVMs. Defaults to the Firecracker CI kernel pinned in versions.nix.";
     };
 
     cephMonHosts = lib.mkOption {
@@ -206,7 +211,7 @@ in
           };
         };
 
-        csfx-guest-kernel-link = lib.mkIf (cfg.enableFirecracker && cfg.guestKernelPath != null) {
+        csfx-guest-kernel-link = lib.mkIf cfg.enableFirecracker {
           description = "Link CSFX guest kernel image into agent state directory";
           wantedBy = [ "csfx-agent.service" ];
           before = [ "csfx-agent.service" ];
