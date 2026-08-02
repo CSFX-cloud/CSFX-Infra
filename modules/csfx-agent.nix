@@ -198,8 +198,8 @@ in
             ReadWritePaths = [ "/var/lib/csfx-agent" "/var/lib/csfx" ]
               ++ lib.optionals (cfg.cephMonHosts != "") [ "/mnt/csfx-volumes" ];
             NoNewPrivileges = true;
-            CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" "CAP_NET_BIND_SERVICE" "CAP_CHOWN" "CAP_FOWNER" ];
-            AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" "CAP_NET_BIND_SERVICE" "CAP_CHOWN" "CAP_FOWNER" ];
+            CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" "CAP_NET_BIND_SERVICE" "CAP_CHOWN" "CAP_FOWNER" "CAP_DAC_OVERRIDE" ];
+            AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" "CAP_SYS_ADMIN" "CAP_NET_BIND_SERVICE" "CAP_CHOWN" "CAP_FOWNER" "CAP_DAC_OVERRIDE" ];
           };
 
           environment = {
