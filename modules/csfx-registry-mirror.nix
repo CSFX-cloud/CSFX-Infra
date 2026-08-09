@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, ... }:
 
 let
   cfg = config.services.csfx-registry-mirror;
@@ -34,15 +34,14 @@ in
 
   config = lib.mkIf cfg.enable {
     services.dockerRegistry = {
+      inherit (cfg) port storagePath;
       enable = true;
       listenAddress = "0.0.0.0";
-      port = cfg.port;
-      storagePath = cfg.storagePath;
       enableGarbageCollect = true;
       extraConfig = {
         proxy = {
           remoteurl = cfg.remoteUrl;
-          ttl = cfg.ttl;
+          inherit (cfg) ttl;
         };
       };
     };
