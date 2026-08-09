@@ -24,6 +24,7 @@
         self.nixosModules.csfx-cp
         self.nixosModules.csfx-setup
         self.nixosModules.csfx-binary-cache
+        self.nixosModules.csfx-registry-mirror
         self.nixosModules.csfx-dev-ssh
         self.nixosModules.update-units
       ];
@@ -69,6 +70,7 @@
             enable = true;
             gatewayUrl = "https://localhost:8000";
             enableFirecracker = true;
+            registryMirror = "localhost:5050";
           };
           csfx-cp = {
             enable = true;
@@ -85,6 +87,7 @@
             dataPart = "/dev/disk/by-label/csfx-data";
           };
           csfx-binary-cache.enable = true;
+          csfx-registry-mirror.enable = true;
           csfx-dev-ssh.enable = true;
           csfx-update-units = {
             enable = true;
@@ -125,6 +128,7 @@
         csfx-agent = import ./modules/csfx-agent.nix;
         csfx-cp = import ./modules/csfx-cp.nix;
         csfx-binary-cache = import ./modules/csfx-binary-cache.nix;
+        csfx-registry-mirror = import ./modules/csfx-registry-mirror.nix;
         csfx-setup = import ./modules/csfx-setup.nix;
         csfx-autoinstall = import ./modules/csfx-autoinstall.nix;
         csfx-dev-ssh = import ./modules/csfx-dev-ssh.nix;

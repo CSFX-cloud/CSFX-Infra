@@ -254,6 +254,11 @@ in
         enable = true;
         listenClientUrls = [ "http://127.0.0.1:2379" ];
         advertiseClientUrls = [ "http://127.0.0.1:2379" ];
+        extraConf = {
+          AUTO_COMPACTION_MODE = "revision";
+          AUTO_COMPACTION_RETENTION = "1000";
+          QUOTA_BACKEND_BYTES = "2147483648";
+        };
       };
     };
 

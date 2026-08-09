@@ -96,6 +96,12 @@ in
       default = null;
       description = "Path to the Ceph client keyring file for this node";
     };
+
+    registryMirror = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Host:port of the CSFX OCI registry pull-through cache. When set, workload image pulls are routed through this mirror instead of hitting upstream registries directly.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -217,6 +223,8 @@ in
             CEPH_KEYRING = toString cfg.cephKeyringPath;
           } // lib.optionalAttrs cfg.enableFirecracker {
             CSFX_FIRECRACKER_BIN_PATH = "${pkgs.pkgsStatic.firecracker}/bin/firecracker";
+          } // lib.optionalAttrs (cfg.registryMirror != null) {
+            CSFX_REGISTRY_MIRROR = cfg.registryMirror;
           };
         };
 
