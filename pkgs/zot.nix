@@ -15,12 +15,15 @@ buildGoModule rec {
 
   subPackages = [ "cmd/zot" ];
 
+  tags = [ "sync" "containers_image_openpgp" ];
+
   doCheck = false;
 
   ldflags = [
     "-s"
     "-w"
     "-X zotregistry.dev/zot/pkg/api/config.ReleaseTag=v${version}"
+    "-X zotregistry.dev/zot/pkg/api/config.BinaryType=sync"
   ];
 
   meta = {
