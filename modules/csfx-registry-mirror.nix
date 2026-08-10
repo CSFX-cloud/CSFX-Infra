@@ -1,7 +1,32 @@
-{ config, lib, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   cfg = config.services.csfx-registry-mirror;
+  zot = pkgs.callPackage ../pkgs/zot.nix { };
+
+  zotConfig = {
+    distSpecVersion = "1.1.0";
+    storage.rootDirectory = cfg.storagePath;
+    http = {
+      address = "0.0.0.0";
+      port = builtins.toString cfg.port;
+    };
+    log.level = "info";
+    extensions.sync = {
+      enable = true;
+      registries = [
+        {
+          urls = [ cfg.remoteUrl ];
+          onDemand = true;
+          tlsVerify = true;
+          maxRetries = 6;
+          retryDelay = "5m";
+        }
+      ];
+    };
+  };
+
+  zotConfigFile = pkgs.writeText "zot-config.json" (builtins.toJSON zotConfig);
 in
 {
   options.services.csfx-registry-mirror = {
@@ -15,7 +40,7 @@ in
 
     remoteUrl = lib.mkOption {
       type = lib.types.str;
-      default = "https://registry-1.docker.io";
+      default = "https://index.docker.io";
       description = "Upstream registry the mirror proxies and caches images from";
     };
 
@@ -24,25 +49,20 @@ in
       default = "/var/lib/csfx-registry-mirror";
       description = "Directory used to store cached image layers";
     };
-
-    ttl = lib.mkOption {
-      type = lib.types.str;
-      default = "168h";
-      description = "How long a cached blob is kept before it is refetched from upstream";
-    };
   };
 
   config = lib.mkIf cfg.enable {
-    services.dockerRegistry = {
-      inherit (cfg) port storagePath;
-      enable = true;
-      listenAddress = "0.0.0.0";
-      enableGarbageCollect = true;
-      extraConfig = {
-        proxy = {
-          remoteurl = cfg.remoteUrl;
-          inherit (cfg) ttl;
-        };
+    systemd.services.csfx-registry-mirror = {
+      description = "CSFX OCI registry pull-through cache (zot)";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network.target" ];
+
+      serviceConfig = {
+        ExecStart = "${lib.getExe zot} serve ${zotConfigFile}";
+        Restart = "on-failure";
+        RestartSec = "5s";
+        DynamicUser = true;
+        StateDirectory = "csfx-registry-mirror";
       };
     };
 
