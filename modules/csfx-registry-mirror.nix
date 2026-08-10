@@ -21,6 +21,7 @@ let
           tlsVerify = true;
           maxRetries = 6;
           retryDelay = "5m";
+          content = [{ prefix = "**"; }];
         }
       ];
     };
