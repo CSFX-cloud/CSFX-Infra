@@ -11,7 +11,7 @@ buildGoModule rec {
     hash = "sha256-tVvqNA7imLmVQoO7giEtktJkgQTaaWjkB/aYM+or6kg=";
   };
 
-  vendorHash = "sha256-TEtbIM4BWyCV4vd8EV1sKXRI679vT4Ydg6cdfFr5JiU=";
+  vendorHash = "sha256-q74nyQE8ELP54QiebCyLqepHty0kGMcJywo6N72eYDA=";
 
   subPackages = [ "cmd/zot" ];
 
