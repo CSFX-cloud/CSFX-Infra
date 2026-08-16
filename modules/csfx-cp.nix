@@ -27,6 +27,8 @@ let
   volumeManagerBin = mkBin "volume-manager" cp."volume-manager";
   failoverBin = mkBin "failover-controller" cp."failover-controller";
   sdnBin = mkBin "sdn-controller" cp."sdn-controller";
+  hasObjectStorage = cp ? "object-storage";
+  objectStorageBin = if hasObjectStorage then mkBin "object-storage" cp."object-storage" else null;
   hasUpdater = cp ? "csfx-updater";
   updaterBin = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
 
@@ -90,6 +92,7 @@ let
       "csfx-volume-manager:8003:Volume Manager"
       "csfx-failover-controller:8004:Failover Controller"
       "csfx-sdn-controller:8005:SDN Controller"
+      "csfx-object-storage:8006:Object Storage"
       "csfx-agent::Agent"
       "csfx-updater::Updater"
     )
@@ -351,6 +354,7 @@ in
             VOLUME_MANAGER_URL = "http://localhost:8003";
             FAILOVER_CONTROLLER_URL = "http://localhost:8004";
             SDN_CONTROLLER_URL = "http://localhost:8005";
+            OBJECT_STORAGE_URL = "http://localhost:8006";
             REGISTRY_SERVICE_URL = "http://localhost:8001";
           } // (if hasFrontend then { STATIC_DIR = "${frontendAssets}"; } else { });
         };
@@ -396,6 +400,15 @@ in
             ETCD_URL = cfg.etcdEndpoints;
           };
         };
+
+        csfx-object-storage = lib.mkIf hasObjectStorage (mkService {
+          description = "CSFX Object Storage";
+          bin = objectStorageBin;
+          binName = "object-storage";
+          extraEnv = {
+            OBJECT_STORAGE_PORT = "8006";
+          };
+        });
 
         csfx-updater = lib.mkIf hasUpdater {
           description = "CSFX Updater — resolves versions and coordinates node updates via etcd";
