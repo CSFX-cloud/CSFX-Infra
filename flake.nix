@@ -22,6 +22,7 @@
       nodeModules = [
         self.nixosModules.csfx-agent
         self.nixosModules.csfx-cp
+        self.nixosModules.csfx-garage
         self.nixosModules.csfx-setup
         self.nixosModules.csfx-binary-cache
         self.nixosModules.csfx-registry-mirror
@@ -127,6 +128,7 @@
       nixosModules = {
         csfx-agent = import ./modules/csfx-agent.nix;
         csfx-cp = import ./modules/csfx-cp.nix;
+        csfx-garage = import ./modules/csfx-garage.nix;
         csfx-binary-cache = import ./modules/csfx-binary-cache.nix;
         csfx-registry-mirror = import ./modules/csfx-registry-mirror.nix;
         csfx-setup = import ./modules/csfx-setup.nix;
