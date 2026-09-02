@@ -57,6 +57,7 @@ let
         PG_SUPERUSER_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
         PG_REPLICATION_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
         GARAGE_ADMIN_TOKEN=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+        GARAGE_RPC_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         OBJECT_STORAGE_ENCRYPTION_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 32)
 
         cat > "$ENV_FILE" <<EOF
@@ -67,6 +68,12 @@ let
     OBJECT_STORAGE_ENCRYPTION_KEY=$OBJECT_STORAGE_ENCRYPTION_KEY
     EOF
         chmod 0600 "$ENV_FILE"
+
+        cat > /etc/csfx/garage.env <<EOF
+    GARAGE_RPC_SECRET=$GARAGE_RPC_SECRET
+    GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN_TOKEN
+    EOF
+        chmod 0600 /etc/csfx/garage.env
 
         printf '%s' "$PG_SUPERUSER_PASSWORD"   > /etc/csfx/patroni-superuser-password
         printf '%s' "$PG_REPLICATION_PASSWORD" > /etc/csfx/patroni-replication-password

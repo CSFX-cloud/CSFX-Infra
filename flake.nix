@@ -87,6 +87,7 @@
             enable = true;
             dataPart = "/dev/disk/by-label/csfx-data";
           };
+          csfx-garage.enable = true;
           csfx-binary-cache.enable = true;
           csfx-registry-mirror.enable = true;
           csfx-dev-ssh.enable = true;

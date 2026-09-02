@@ -31,11 +31,6 @@ in
       description = "Directory Garage stores its metadata database in. Should be on fast (SSD) storage.";
     };
 
-    rpcPublicAddr = lib.mkOption {
-      type = lib.types.str;
-      description = "host:port this node advertises to peers for Garage RPC, reachable over the wgmgmt0 management tunnel";
-    };
-
     s3BindAddr = lib.mkOption {
       type = lib.types.str;
       default = "0.0.0.0:3900";
@@ -58,6 +53,7 @@ in
   config = lib.mkIf cfg.enable {
     services.garage = {
       enable = true;
+      package = pkgs.garage_1;
       environmentFile = cfg.secretsFile;
       settings = {
         data_dir = cfg.dataDir;
@@ -67,7 +63,7 @@ in
         compression_level = 1;
 
         rpc_bind_addr = "0.0.0.0:3901";
-        rpc_public_addr = cfg.rpcPublicAddr;
+        rpc_public_addr = "127.0.0.1:3901";
 
         s3_api = {
           s3_region = "csfx";
@@ -78,6 +74,43 @@ in
         admin = {
           api_bind_addr = cfg.adminBindAddr;
         };
+      };
+    };
+
+    systemd.services.garage = {
+      after = [ "csfx-agent.service" "csfx-setup.service" ];
+      requires = [ "csfx-agent.service" "csfx-setup.service" ];
+      serviceConfig = {
+        RuntimeDirectory = "csfx-garage";
+        ExecStartPre = [
+          (pkgs.writeShellScript "csfx-garage-set-rpc-addr" ''
+            set -euo pipefail
+
+            IFACE="wgmgmt0"
+            RUNTIME_CONFIG="''${RUNTIME_DIRECTORY}/garage.toml"
+            TIMEOUT=60
+            ELAPSED=0
+
+            while ! ${pkgs.iproute2}/bin/ip -4 addr show dev "$IFACE" 2>/dev/null | ${pkgs.gnugrep}/bin/grep -q inet; do
+              if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+                echo "[ERROR] wgmgmt0 has no address after timeout elapsed=''${TIMEOUT}s"
+                exit 1
+              fi
+              sleep 1
+              ELAPSED=$((ELAPSED + 1))
+            done
+
+            TUNNEL_IP=$(${pkgs.iproute2}/bin/ip -4 addr show dev "$IFACE" \
+              | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+
+            ${pkgs.gnused}/bin/sed \
+              "s|^rpc_public_addr = .*|rpc_public_addr = \"''${TUNNEL_IP}:3901\"|" \
+              /etc/garage.toml > "$RUNTIME_CONFIG"
+
+            echo "[INFO] garage rpc_public_addr set tunnel_ip=''${TUNNEL_IP}"
+          '')
+        ];
+        ExecStart = lib.mkForce "${config.services.garage.package}/bin/garage -c /run/csfx-garage/garage.toml server";
       };
     };
 
