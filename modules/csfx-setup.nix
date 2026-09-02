@@ -56,11 +56,15 @@ let
         DB_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
         PG_SUPERUSER_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
         PG_REPLICATION_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
+        GARAGE_ADMIN_TOKEN=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+        OBJECT_STORAGE_ENCRYPTION_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 32)
 
         cat > "$ENV_FILE" <<EOF
     DATABASE_URL=postgres://csfx:$DB_PASSWORD@localhost:5432/csfx
     JWT_SECRET=$JWT_SECRET
     ETCD_ENDPOINTS=http://localhost:2379
+    GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN_TOKEN
+    OBJECT_STORAGE_ENCRYPTION_KEY=$OBJECT_STORAGE_ENCRYPTION_KEY
     EOF
         chmod 0600 "$ENV_FILE"
 
