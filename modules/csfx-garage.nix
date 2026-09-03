@@ -22,13 +22,13 @@ in
     dataDir = lib.mkOption {
       type = lib.types.path;
       default = "/var/lib/csfx-garage/data";
-      description = "Directory Garage stores object data in";
+      description = "Directory Garage stores object data in. Changing this requires updating the StateDirectory entry in the garage systemd unit accordingly.";
     };
 
     metadataDir = lib.mkOption {
       type = lib.types.path;
       default = "/var/lib/csfx-garage/meta";
-      description = "Directory Garage stores its metadata database in. Should be on fast (SSD) storage.";
+      description = "Directory Garage stores its metadata database in. Should be on fast (SSD) storage. Changing this requires updating the StateDirectory entry in the garage systemd unit accordingly.";
     };
 
     s3BindAddr = lib.mkOption {
@@ -82,6 +82,7 @@ in
       requires = [ "csfx-agent.service" "csfx-setup.service" ];
       serviceConfig = {
         RuntimeDirectory = "csfx-garage";
+        StateDirectory = "csfx-garage/data csfx-garage/meta";
         ExecStartPre = [
           (pkgs.writeShellScript "csfx-garage-set-rpc-addr" ''
             set -euo pipefail
