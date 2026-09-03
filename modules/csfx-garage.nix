@@ -46,6 +46,10 @@ in
 
   config = lib.mkIf cfg.enable {
     users.groups.csfx-garage-data = { };
+    users.users.csfx-garage = {
+      isSystemUser = true;
+      group = "csfx-garage-data";
+    };
 
     services.garage = {
       enable = true;
@@ -77,6 +81,8 @@ in
       after = [ "csfx-agent.service" "csfx-setup.service" ];
       requires = [ "csfx-agent.service" "csfx-setup.service" ];
       serviceConfig = {
+        DynamicUser = lib.mkForce false;
+        User = "csfx-garage";
         Group = "csfx-garage-data";
         RuntimeDirectory = "csfx-garage";
         StateDirectory = "csfx-garage/data csfx-garage/meta";
