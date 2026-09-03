@@ -59,7 +59,7 @@ in
         data_dir = cfg.dataDir;
         metadata_dir = cfg.metadataDir;
         db_engine = "lmdb";
-        replication_factor = 3;
+        replication_factor = 1;
         compression_level = 1;
 
         rpc_bind_addr = "0.0.0.0:3901";
