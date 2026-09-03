@@ -405,8 +405,12 @@ in
           description = "CSFX Object Storage";
           bin = objectStorageBin;
           binName = "object-storage";
+          after = [ "garage.service" ];
+          requires = [ "garage.service" ];
           extraEnv = {
             OBJECT_STORAGE_PORT = "8006";
+            GARAGE_ZONE = config.services.csfx-garage.zone;
+            GARAGE_DATA_DIR = config.services.csfx-garage.dataDir;
           };
         });
 
