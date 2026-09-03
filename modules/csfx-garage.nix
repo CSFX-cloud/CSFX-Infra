@@ -53,7 +53,7 @@ in
   config = lib.mkIf cfg.enable {
     services.garage = {
       enable = true;
-      package = pkgs.garage_1;
+      package = pkgs.garage_2;
       environmentFile = cfg.secretsFile;
       settings = {
         data_dir = cfg.dataDir;
