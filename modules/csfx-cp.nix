@@ -54,7 +54,7 @@ let
     ETCD_ENDPOINTS = cfg.etcdEndpoints;
   };
 
-  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null }: {
+  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { } }: {
     inherit description;
     after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
     requires = [ "csfx-migrate.service" ] ++ requires;
@@ -67,7 +67,7 @@ let
       EnvironmentFile = cfg.envFile;
     } // lib.optionalAttrs (stateDirectory != null) {
       StateDirectory = stateDirectory;
-    };
+    } // extraServiceConfig;
     environment = commonEnv // extraEnv // { LISTEN_ADDR = listenAddr; };
   };
 
@@ -411,6 +411,9 @@ in
             OBJECT_STORAGE_PORT = "8006";
             GARAGE_ZONE = config.services.csfx-garage.zone;
             GARAGE_DATA_DIR = config.services.csfx-garage.dataDir;
+          };
+          extraServiceConfig = {
+            SupplementaryGroups = [ "csfx-garage-data" ];
           };
         });
 

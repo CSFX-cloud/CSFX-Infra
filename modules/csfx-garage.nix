@@ -13,12 +13,6 @@ in
       description = "Garage cluster layout zone for this node";
     };
 
-    capacityBytes = lib.mkOption {
-      type = lib.types.nullOr lib.types.ints.positive;
-      default = null;
-      description = "Storage capacity in bytes to contribute to the Garage layout. Leave null for a gateway-only node (serves the S3 API but stores no data).";
-    };
-
     dataDir = lib.mkOption {
       type = lib.types.path;
       default = "/var/lib/csfx-garage/data";
@@ -51,6 +45,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    users.groups.csfx-garage-data = { };
+
     services.garage = {
       enable = true;
       package = pkgs.garage_2;
@@ -81,8 +77,10 @@ in
       after = [ "csfx-agent.service" "csfx-setup.service" ];
       requires = [ "csfx-agent.service" "csfx-setup.service" ];
       serviceConfig = {
+        Group = "csfx-garage-data";
         RuntimeDirectory = "csfx-garage";
         StateDirectory = "csfx-garage/data csfx-garage/meta";
+        StateDirectoryMode = "0750";
         ExecStartPre = [
           (pkgs.writeShellScript "csfx-garage-set-rpc-addr" ''
             set -euo pipefail
