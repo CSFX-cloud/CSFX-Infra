@@ -356,6 +356,7 @@ in
             SDN_CONTROLLER_URL = "http://localhost:8005";
             OBJECT_STORAGE_URL = "http://localhost:8006";
             REGISTRY_SERVICE_URL = "http://localhost:8001";
+            GARAGE_INTERNAL_HOST = "127.0.0.1";
           } // (if hasFrontend then { STATIC_DIR = "${frontendAssets}"; } else { });
         };
 
@@ -414,6 +415,27 @@ in
           };
           extraServiceConfig = {
             SupplementaryGroups = [ "csfx-garage-data" ];
+            RuntimeDirectory = "csfx-object-storage";
+            EnvironmentFile = [ cfg.envFile "-/run/csfx-object-storage/public-url.env" ];
+            ExecStartPre = [
+              (pkgs.writeShellScript "csfx-object-storage-set-public-url" ''
+                set -euo pipefail
+
+                IP=$(${pkgs.iproute2}/bin/ip -4 addr show scope global 2>/dev/null \
+                  | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}' \
+                  | head -1)
+
+                if [ -z "$IP" ]; then
+                  echo "[ERROR] could not determine a global IPv4 address"
+                  exit 1
+                fi
+
+                echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000/s3data" \
+                  > /run/csfx-object-storage/public-url.env
+
+                echo "[INFO] garage public s3 url set ip=''${IP}"
+              '')
+            ];
           };
         });
 
