@@ -430,7 +430,7 @@ in
                   exit 1
                 fi
 
-                echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000/s3data" \
+                echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000" \
                   > /run/csfx-object-storage/public-url.env
 
                 echo "[INFO] garage public s3 url set ip=''${IP}"
