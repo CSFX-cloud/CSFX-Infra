@@ -154,6 +154,15 @@ in
           return polkit.Result.YES;
         }
         ''}
+        ${lib.optionalString cfg.enableQemu ''
+        if ((action.id == "org.freedesktop.systemd1.manage-units" ||
+             action.id == "org.freedesktop.systemd1.manage-unit-files") &&
+            action.lookup("unit") != null &&
+            action.lookup("unit").indexOf("csfx-qemu-") == 0 &&
+            subject.user == "csfx-agent") {
+          return polkit.Result.YES;
+        }
+        ''}
       });
     '';
 
