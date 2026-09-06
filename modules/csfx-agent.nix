@@ -72,6 +72,12 @@ in
       description = "Enable Firecracker microVM workload support (requires KVM)";
     };
 
+    enableQemu = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Enable QEMU/KVM full-virtualization VM workload support (requires KVM)";
+    };
+
     guestKernelPath = lib.mkOption {
       type = lib.types.path;
       default = defaultGuestKernel;
@@ -118,9 +124,9 @@ in
     };
 
     boot.kernelModules = [ "wireguard" ]
-      ++ lib.optionals cfg.enableFirecracker [ "kvm" "kvm-intel" "kvm-amd" "tun" "vhost_net" ];
+      ++ lib.optionals (cfg.enableFirecracker || cfg.enableQemu) [ "kvm" "kvm-intel" "kvm-amd" "tun" "vhost_net" ];
 
-    services.udev.extraRules = lib.mkIf cfg.enableFirecracker ''
+    services.udev.extraRules = lib.mkIf (cfg.enableFirecracker || cfg.enableQemu) ''
       KERNEL=="kvm", GROUP="kvm", MODE="0660"
     '';
 
@@ -158,7 +164,7 @@ in
           group = "csfx-agent";
           home = "/var/lib/csfx-agent";
           createHome = true;
-          extraGroups = [ "docker" ] ++ lib.optionals cfg.enableFirecracker [ "kvm" ];
+          extraGroups = [ "docker" ] ++ lib.optionals (cfg.enableFirecracker || cfg.enableQemu) [ "kvm" ];
         };
         csfx-updater = {
           isSystemUser = true;
@@ -191,6 +197,7 @@ in
 
           path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 pkgs.util-linux pkgs.coredns ]
             ++ lib.optionals cfg.enableFirecracker [ pkgs.pkgsStatic.firecracker pkgs.e2fsprogs ]
+            ++ lib.optionals cfg.enableQemu [ pkgs.qemu_kvm pkgs.dnsmasq ]
             ++ lib.optionals (cfg.cephMonHosts != "") [ pkgs.ceph-client ];
 
           serviceConfig = {
@@ -223,6 +230,8 @@ in
             CEPH_KEYRING = toString cfg.cephKeyringPath;
           } // lib.optionalAttrs cfg.enableFirecracker {
             CSFX_FIRECRACKER_BIN_PATH = "${pkgs.pkgsStatic.firecracker}/bin/firecracker";
+          } // lib.optionalAttrs cfg.enableQemu {
+            CSFX_QEMU_BIN_PATH = "${pkgs.qemu_kvm}/bin/qemu-system-x86_64";
           } // lib.optionalAttrs (cfg.registryMirror != null) {
             CSFX_REGISTRY_MIRROR = cfg.registryMirror;
           };

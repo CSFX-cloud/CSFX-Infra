@@ -71,6 +71,7 @@
             enable = true;
             gatewayUrl = "https://localhost:8000";
             enableFirecracker = true;
+            enableQemu = true;
             registryMirror = "localhost:5050";
           };
           csfx-cp = {
