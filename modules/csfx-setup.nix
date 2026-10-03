@@ -102,6 +102,61 @@ let
     ln -sfn "$MOUNT/csfx-updater" /var/lib/csfx-updater-data
   '';
 
+  dataBindScript = pkgs.writeShellScript "csfx-data-binds" ''
+    set -euo pipefail
+
+    DATA="/var/lib/csfx-data"
+
+    qemu_running() {
+      [ -n "$(systemctl list-units --state=active --plain --no-legend 'csfx-qemu-*')" ]
+    }
+
+    guard_active() {
+      if [ "$1" = "qemu" ]; then
+        qemu_running
+      else
+        systemctl is-active --quiet "$1"
+      fi
+    }
+
+    bind_to_data() {
+      name="$1"
+      dst="$2"
+      owner="$3"
+      shift 3
+      src="$DATA/$name"
+
+      mkdir -p "$src" "$dst"
+
+      if mountpoint -q "$dst"; then
+        return 0
+      fi
+
+      if [ -n "$(ls -A "$dst")" ]; then
+        for guard in "$@"; do
+          if guard_active "$guard"; then
+            echo "[WARN] bind deferred until restart, workload active dst=$dst guard=$guard"
+            return 0
+          fi
+        done
+        cp -a "$dst"/. "$src"/
+        find "$dst" -mindepth 1 -delete
+        echo "[INFO] migrated existing data src=$src dst=$dst"
+      else
+        chown "$owner" "$src"
+      fi
+
+      mount --bind "$src" "$dst"
+      echo "[INFO] bind mounted src=$src dst=$dst"
+    }
+
+    bind_to_data csfx-agent/qemu /var/lib/csfx-agent/qemu csfx-agent:csfx-agent csfx-agent.service qemu
+    bind_to_data csfx-agent/rootfs /var/lib/csfx-agent/rootfs csfx-agent:csfx-agent csfx-agent.service qemu
+    bind_to_data csfx-agent/firecracker /var/lib/csfx-agent/firecracker csfx-agent:csfx-agent csfx-agent.service qemu
+    bind_to_data csfx-garage /var/lib/csfx-garage root:root garage.service
+    bind_to_data csfx-registry-mirror /var/lib/private/csfx-registry-mirror root:root csfx-registry-mirror.service
+  '';
+
   logoFile = pkgs.writeText "csfx-logo" ''
      ██████╗███████╗███████╗██╗  ██╗
     ██╔════╝██╔════╝██╔════╝╚██╗██╔╝
@@ -195,6 +250,21 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           ExecStart = mountScript;
+          User = "root";
+        };
+      };
+
+      csfx-data-binds = {
+        description = "CSFX bind large state directories onto the data partition";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "csfx-mount-data.service" ];
+        requires = [ "csfx-mount-data.service" ];
+        before = [ "csfx-agent.service" "garage.service" "csfx-registry-mirror.service" ];
+        path = [ pkgs.coreutils pkgs.util-linux pkgs.findutils pkgs.systemd ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = dataBindScript;
           User = "root";
         };
       };
