@@ -38,11 +38,12 @@
 
         networking.nameservers = [ "1.1.1.1" "9.9.9.9" ];
 
-        fileSystems."/" = { device = "/dev/disk/by-label/nixos"; fsType = "ext4"; };
+        fileSystems."/" = { device = "/dev/disk/by-label/nixos"; fsType = "ext4"; autoResize = true; };
         fileSystems."/boot" = { device = "/dev/disk/by-label/boot"; fsType = "vfat"; options = [ "umask=0077" ]; };
         swapDevices = [ ];
 
         boot = {
+          growPartition = true;
           initrd.availableKernelModules = [
             "virtio_pci"
             "virtio_blk"
