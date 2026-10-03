@@ -1,131 +1,131 @@
 {
   firecrackerGuestKernel = {
     amd64 = {
-      url = "https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.9/x86_64/vmlinux-6.1.102";
+      url    = "https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.9/x86_64/vmlinux-6.1.102";
       sha256 = "3b6e45c66d1b66d4fb0a1528107abbe890972f94e902bafe85fdf5108288c575";
     };
     arm64 = {
-      url = "https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.9/aarch64/vmlinux-6.1.102";
+      url    = "https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.9/aarch64/vmlinux-6.1.102";
       sha256 = "aee80c3ab9bc2d32f4c00de8ddf919c200359a400aae7c4710e8bc8ad438e1c4";
     };
   };
   csfx = {
-    version = "0.2.2-alpha.818";
+    version = "0.2.2-alpha.831";
     agent = {
       amd64 = {
-        url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-agent-amd64";
-        sha256 = "95047bff8181865dcb38fe5d120e9f6c1c2aeb28f6757797c4caf59306cf0d2b";
+        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-agent-amd64";
+        sha256 = "4f44942170068cc477ec806f8b5cd7c78cb1f52e21c4546652d9a6dfdb1da184";
       };
       arm64 = {
-        url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-agent-arm64";
-        sha256 = "9ba2f69ba5ca4a212790f460a4a96bd051300e5c1f5fcb3ab82e2066d412b054";
+        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-agent-arm64";
+        sha256 = "8eba6c8a16fe2969606d3b1855acd91a6f56b2a04f8f3d07cb13e02842440e16";
       };
     };
     guestInit = {
       amd64 = {
-        url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-guest-init-amd64";
-        sha256 = "e361e3871132d2e65aaec91b614f435da45e3e65a62351afcdd1229e66b9d4ce";
+        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-guest-init-amd64";
+        sha256 = "ce761a5581349e75faa8f57d43507c8289f171b46ec284a6164db58f2db53ef0";
       };
       arm64 = {
-        url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-guest-init-arm64";
-        sha256 = "bc296cc4aa0b978cacb5858e49c7b9c76a3e02a106b1a41ca44ffea3e92c9615";
+        url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-guest-init-arm64";
+        sha256 = "ea72b970ac25671e8772ac0fe04cfe4bccd34946906c905f810b4b6bba51e63c";
       };
     };
     controlPlane = {
       migrate = {
         amd64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-csfx-migrate-amd64";
-          sha256 = "7064eb20f64bdc4f1c7e11f4f0e1cd14887d0e4f4148fbf08bba11c0fa6119eb";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-csfx-migrate-amd64";
+          sha256 = "77ea302909d0d946e866cf85b11d94cab35abc8467dcc043fc7be42e723fe43e";
         };
         arm64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-csfx-migrate-arm64";
-          sha256 = "feb54986d04bd013efd8f290a2c9f4e270b9abe54d11890226b7adb1ed057337";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-csfx-migrate-arm64";
+          sha256 = "1a57f0f6dd7bd9b4bbe949e41e149deac1bdada641b12781f47b3ee9d01f5b5c";
         };
       };
       api-gateway = {
         amd64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-api-gateway-amd64";
-          sha256 = "86c6733e7e334f67ee111b9191f42031b051b0cf2f5e702a50ad9a8b6122dda4";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-api-gateway-amd64";
+          sha256 = "15a8b1ac2b214be31760df0f0b05486eb9cb8ed00b73632b7d1fdf176c87ba7d";
         };
         arm64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-api-gateway-arm64";
-          sha256 = "24e0df4ff77dec3201dc611f75d73752d53373706f34275634931d84f7e6b20f";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-api-gateway-arm64";
+          sha256 = "457db1b71beb8dfd6f687e5f8a9e5241e5f9ca33f964b9ee956c85121f5482f1";
         };
       };
       registry = {
         amd64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-registry-amd64";
-          sha256 = "2c82bd4238c173a319502cecb80e4606d8c817c5a67e69c27ada6e5901f5a50c";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-registry-amd64";
+          sha256 = "c5a220a92e6aa9d9cfdd9c06ca250b748c5383f26ec6a6e32889011d457693ea";
         };
         arm64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-registry-arm64";
-          sha256 = "f9b50d3fa88cd1a55bddc3ecb91d2614581188fff1e4774026844ea1aa184929";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-registry-arm64";
+          sha256 = "db2c5ea8b090cb7dcb2dec175e9005a051da6a1ba9ad97686d1b2bf2b009eb78";
         };
       };
       scheduler = {
         amd64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-scheduler-amd64";
-          sha256 = "791086b171cfa15c81a1131122dee2e1fb57d3b44f7e6865bdc00ecd979ad253";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-scheduler-amd64";
+          sha256 = "09c404d38eb231959406e1616087ccfbda63a66db7cec350509ed6ce3565ccae";
         };
         arm64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-scheduler-arm64";
-          sha256 = "ad424772d5bc2398cc00c6add7c942012ce6c721539276b3d64c73272dc547a7";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-scheduler-arm64";
+          sha256 = "6d00b65d9fafec45ef767b97b55a47aa6e87ad3aecc910e6110e13733d3f2423";
         };
       };
       volume-manager = {
         amd64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-volume-manager-amd64";
-          sha256 = "8a03b253ca7e5a1afb161ea0ea6683b083314d005291f2768bc992a60ad71604";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-volume-manager-amd64";
+          sha256 = "0dba2b185a04b14953911986c25f5a5e41b5fe39ede45bb5655b1fa281cae1f2";
         };
         arm64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-volume-manager-arm64";
-          sha256 = "6d53a62a6dda68e7a4df9f7d8fd3c35f8cfa05b95f14a4f7febddfd5ee9b5f1c";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-volume-manager-arm64";
+          sha256 = "31c04a29c1020e100612d02c6a186d9191e3aa04ba8a40fbdb3372a0f95059c8";
         };
       };
       failover-controller = {
         amd64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-failover-controller-amd64";
-          sha256 = "68b8536880b765b5a4b5b08364d0f9db8e8207b6b4594b30897075b3906aba50";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-failover-controller-amd64";
+          sha256 = "d6d913bc5fb12d14b1bfb486769deafb4353913ef6f61c1c4eeca1fe488a72ba";
         };
         arm64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-failover-controller-arm64";
-          sha256 = "c949c294d105a1141dd1b5626a1000161a31e202a87bd8deab79ca6b0f29e0b5";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-failover-controller-arm64";
+          sha256 = "9ef311a918ef31845659b8f15a3c1f56e1e6bb0bc33bd8b98ae2c92835d34848";
         };
       };
       sdn-controller = {
         amd64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-sdn-controller-amd64";
-          sha256 = "775ba61292c6e70ac05da8db04bf9752050989221c103e1f7dc8c638b6bf1e5a";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-sdn-controller-amd64";
+          sha256 = "fe56ef58e97c9ea6c1b3884fcaaab39bc55dec99161a3b40040dc91a852b751c";
         };
         arm64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-sdn-controller-arm64";
-          sha256 = "a475e5672492df19c616baaef6aac9b5e1b246b7ac13c0fc31ccf36b5c14d164";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-sdn-controller-arm64";
+          sha256 = "157a282a4a7ccef6a647ff96c212abf9c0701f4e03325eecfe87d0f1ebddeb6c";
         };
       };
       object-storage = {
         amd64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-object-storage-amd64";
-          sha256 = "61582c72ddf26d610c3018e29198f6ce4a4f083cbb12bc653c1914990d99f35b";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-object-storage-amd64";
+          sha256 = "3220bcab2e15d8244f790bc527d9b4202493da2aac5a36f3cc13560530d871f4";
         };
         arm64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-cp-object-storage-arm64";
-          sha256 = "3d0389c2f07816b3af0f455035b00a81b7a6669fd22da51ea4e2b69bf7a291ed";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-cp-object-storage-arm64";
+          sha256 = "bd1f8a6d84288d0e84500e42d1d73b9ff01254135d15c88a3a294610cc4043c8";
         };
       };
       csfx-updater = {
         amd64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-updater-amd64";
-          sha256 = "9926614ddf36354c28a7bfa42ddcba768611ed2eee61adcafdbe636cf0d6451f";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-updater-amd64";
+          sha256 = "1e07556161148236d391fd4fb6044fc3afbb22ddbe3c1b4864e308220654abaa";
         };
         arm64 = {
-          url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-updater-arm64";
-          sha256 = "7206731ff377acbb9fb43e11b4f7e90c5ef1fe2a35ff7af6c161caceec79b900";
+          url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-updater-arm64";
+          sha256 = "65d30aed4d0f8dabfe01e5e2c485d41df85331f215486bc5d81944447b6de368";
         };
       };
     };
     frontend = {
-      url = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.818/csfx-frontend.tar.gz";
-      sha256 = "26126e6866b6a35a237543b6fa3670c4407973a872575184ef5cfa45bd54e29b";
+      url    = "https://github.com/CSFX-cloud/CSFX-Core/releases/download/v0.2.2-alpha.831/csfx-frontend.tar.gz";
+      sha256 = "6a8648928b8f27416bde248fb0fce3afaad8734b9005e4b9435cff9aa0b17e5b";
     };
   };
 }
