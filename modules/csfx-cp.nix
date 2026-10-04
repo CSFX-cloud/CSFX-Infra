@@ -375,6 +375,9 @@ in
           description = "CSFX Scheduler";
           bin = schedulerBin;
           binName = "scheduler";
+          extraEnv = {
+            API_GATEWAY_URL = "https://localhost:8000";
+          };
         };
 
         csfx-volume-manager = mkService {
