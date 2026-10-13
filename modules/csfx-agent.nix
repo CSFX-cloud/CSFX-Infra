@@ -283,7 +283,7 @@ in
 
     services.openssh = lib.mkIf cfg.enableSsh {
       enable = true;
-      authorizedKeysFiles = lib.mkForce [ ];
+      authorizedKeysFiles = lib.mkForce [ "none" ];
       settings = {
         PermitRootLogin = "no";
         PasswordAuthentication = false;
