@@ -134,7 +134,7 @@ in
 
     security.polkit.extraConfig = ''
       polkit.addRule(function(action, subject) {
-        var managedUnits = ["docker.service", "reboot.target", "poweroff.target"];
+        var managedUnits = ["docker.service", "reboot.target", "poweroff.target"${lib.optionalString cfg.enableSsh '', "sshd.service"''}];
         if (action.id == "org.freedesktop.systemd1.manage-units" &&
             managedUnits.indexOf(action.lookup("unit")) !== -1 &&
             subject.user == "csfx-agent") {
@@ -235,6 +235,8 @@ in
             CSFX_GATEWAY_URL = cfg.gatewayUrl;
             CSFX_HEARTBEAT_INTERVAL = toString cfg.heartbeatInterval;
             CSFX_AGENT_PORT = toString cfg.agentPort;
+          } // lib.optionalAttrs cfg.enableSsh {
+            CSFX_SSH_CONTROL = "1";
           } // lib.optionalAttrs (cfg.registrationToken != "") {
             CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
           } // lib.optionalAttrs (cfg.wgEndpoint != null) {
@@ -279,10 +281,28 @@ in
 
     services.openssh = lib.mkIf cfg.enableSsh {
       enable = true;
+      authorizedKeysFiles = lib.mkForce [ ];
       settings = {
+        PermitRootLogin = "no";
+        PasswordAuthentication = false;
+        KbdInteractiveAuthentication = false;
+        AllowUsers = [ "csfx" ];
         AuthorizedKeysCommand = "${agentBin}/bin/csfx-agent --authorized-keys %u";
         AuthorizedKeysCommandUser = "csfx-agent";
       };
     };
+
+    systemd.services.sshd.wantedBy = lib.mkIf cfg.enableSsh (lib.mkForce [ ]);
+
+    users.users.csfx = lib.mkIf cfg.enableSsh {
+      isNormalUser = true;
+      group = "csfx";
+      extraGroups = [ "wheel" ];
+      hashedPassword = "!";
+    };
+
+    users.groups.csfx = lib.mkIf cfg.enableSsh { };
+
+    security.sudo.wheelNeedsPassword = lib.mkIf cfg.enableSsh false;
   };
 }
