@@ -130,48 +130,50 @@ in
       KERNEL=="kvm", GROUP="kvm", MODE="0660"
     '';
 
-    security.polkit.enable = true;
-
-    security.polkit.extraConfig = ''
-      polkit.addRule(function(action, subject) {
-        var managedUnits = ["docker.service", "reboot.target", "poweroff.target"${lib.optionalString cfg.enableSsh '', "sshd.service"''}];
-        if (action.id == "org.freedesktop.systemd1.manage-units" &&
-            managedUnits.indexOf(action.lookup("unit")) !== -1 &&
-            subject.user == "csfx-agent") {
-          return polkit.Result.YES;
-        }
-        var powerActions = [
-          "org.freedesktop.login1.reboot",
-          "org.freedesktop.login1.reboot-multiple-sessions",
-          "org.freedesktop.login1.reboot-ignore-inhibit",
-          "org.freedesktop.login1.power-off",
-          "org.freedesktop.login1.power-off-multiple-sessions",
-          "org.freedesktop.login1.power-off-ignore-inhibit"
-        ];
-        if (powerActions.indexOf(action.id) !== -1 &&
-            subject.user == "csfx-agent") {
-          return polkit.Result.YES;
-        }
-        ${lib.optionalString cfg.enableFirecracker ''
-        if ((action.id == "org.freedesktop.systemd1.manage-units" ||
-             action.id == "org.freedesktop.systemd1.manage-unit-files") &&
-            action.lookup("unit") != null &&
-            action.lookup("unit").indexOf("csfx-jailer-") == 0 &&
-            subject.user == "csfx-agent") {
-          return polkit.Result.YES;
-        }
-        ''}
-        ${lib.optionalString cfg.enableQemu ''
-        if ((action.id == "org.freedesktop.systemd1.manage-units" ||
-             action.id == "org.freedesktop.systemd1.manage-unit-files") &&
-            action.lookup("unit") != null &&
-            action.lookup("unit").indexOf("csfx-qemu-") == 0 &&
-            subject.user == "csfx-agent") {
-          return polkit.Result.YES;
-        }
-        ''}
-      });
-    '';
+    security = {
+      polkit.enable = true;
+      polkit.extraConfig = ''
+        polkit.addRule(function(action, subject) {
+          var managedUnits = ["docker.service", "reboot.target", "poweroff.target"${lib.optionalString cfg.enableSsh '', "sshd.service"''}];
+          if (action.id == "org.freedesktop.systemd1.manage-units" &&
+              managedUnits.indexOf(action.lookup("unit")) !== -1 &&
+              subject.user == "csfx-agent") {
+            return polkit.Result.YES;
+          }
+          var powerActions = [
+            "org.freedesktop.login1.reboot",
+            "org.freedesktop.login1.reboot-multiple-sessions",
+            "org.freedesktop.login1.reboot-ignore-inhibit",
+            "org.freedesktop.login1.power-off",
+            "org.freedesktop.login1.power-off-multiple-sessions",
+            "org.freedesktop.login1.power-off-ignore-inhibit"
+          ];
+          if (powerActions.indexOf(action.id) !== -1 &&
+              subject.user == "csfx-agent") {
+            return polkit.Result.YES;
+          }
+          ${lib.optionalString cfg.enableFirecracker ''
+          if ((action.id == "org.freedesktop.systemd1.manage-units" ||
+               action.id == "org.freedesktop.systemd1.manage-unit-files") &&
+              action.lookup("unit") != null &&
+              action.lookup("unit").indexOf("csfx-jailer-") == 0 &&
+              subject.user == "csfx-agent") {
+            return polkit.Result.YES;
+          }
+          ''}
+          ${lib.optionalString cfg.enableQemu ''
+          if ((action.id == "org.freedesktop.systemd1.manage-units" ||
+               action.id == "org.freedesktop.systemd1.manage-unit-files") &&
+              action.lookup("unit") != null &&
+              action.lookup("unit").indexOf("csfx-qemu-") == 0 &&
+              subject.user == "csfx-agent") {
+            return polkit.Result.YES;
+          }
+          ''}
+        });
+      '';
+      sudo.wheelNeedsPassword = lib.mkIf cfg.enableSsh false;
+    };
 
     users = {
       users = {
@@ -302,7 +304,5 @@ in
     };
 
     users.groups.csfx = lib.mkIf cfg.enableSsh { };
-
-    security.sudo.wheelNeedsPassword = lib.mkIf cfg.enableSsh false;
   };
 }

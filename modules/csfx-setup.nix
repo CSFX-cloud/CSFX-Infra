@@ -1,4 +1,4 @@
-{ config, lib, pkgs, versions, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   cfg = config.services.csfx-setup;
@@ -177,9 +177,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    users.mutableUsers = false;
-    users.allowNoPasswordLogin = true;
-    users.users.root.hashedPassword = "!";
+    users = {
+      mutableUsers = false;
+      allowNoPasswordLogin = true;
+      users.root.hashedPassword = "!";
+    };
 
     networking.firewall = {
       enable = true;
