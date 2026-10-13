@@ -32,6 +32,21 @@ let
   hasUpdater = cp ? "csfx-updater";
   updaterBin = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
 
+  setupCodeFile = "/run/csfx/setup-code";
+
+  setupCodeScript = pkgs.writeShellScript "csfx-setup-code" ''
+    set -euo pipefail
+
+    if [ -s ${setupCodeFile} ]; then
+      exit 0
+    fi
+
+    RAW=$(${pkgs.openssl}/bin/openssl rand -base64 48 | ${pkgs.coreutils}/bin/tr -dc 'A-HJ-NP-Z2-9' | ${pkgs.coreutils}/bin/cut -c1-8)
+    printf '%s-%s\n' "''${RAW:0:4}" "''${RAW:4:4}" > ${setupCodeFile}
+    chmod 0600 ${setupCodeFile}
+    echo "[INFO] setup code generated file=${setupCodeFile}"
+  '';
+
   hasFrontend = v ? "frontend";
   frontendAssets =
     if hasFrontend then
@@ -175,6 +190,14 @@ in
       type = lib.types.path;
       default = "/etc/csfx/cp.env";
       description = "Path to environment file with secrets";
+    };
+
+    gatewayPackage = lib.mkOption {
+      type = lib.types.package;
+      default = gatewayBin;
+      readOnly = true;
+      internal = true;
+      description = "API gateway package, shared with the console recovery helper";
     };
 
     updater = {
@@ -327,6 +350,20 @@ in
           environment = { DATABASE_URL = cfg.dbUrl; };
         };
 
+        csfx-setup-code = {
+          description = "CSFX first-install setup code";
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            User = "root";
+            RuntimeDirectory = "csfx";
+            RuntimeDirectoryPreserve = true;
+            UMask = "0077";
+            ExecStart = setupCodeScript;
+          };
+        };
+
         csfx-migrate = {
           description = "CSFX database migration";
           after = [ "network.target" "csfx-db-init.service" ];
@@ -347,8 +384,9 @@ in
           binName = "api-gateway";
           listenAddr = "0.0.0.0";
           stateDirectory = "csfx-cp";
-          after = [ "csfx-registry.service" ];
-          requires = [ "csfx-registry.service" ];
+          after = [ "csfx-registry.service" "csfx-setup-code.service" ];
+          requires = [ "csfx-registry.service" "csfx-setup-code.service" ];
+          extraServiceConfig.LoadCredential = "setup-code:${setupCodeFile}";
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             VOLUME_MANAGER_URL = "http://localhost:8003";

@@ -19,30 +19,71 @@ let
     DISK="${cfg.disk}"
     TOPLEVEL="${installedSystem.config.system.build.toplevel}"
 
-    if [ "$DISK" = "auto" ]; then
-      for candidate in /dev/vda /dev/nvme0n1 /dev/sda /dev/sdb /dev/xvda; do
+    list_candidates() {
+      for candidate in /dev/vda /dev/nvme0n1 /dev/nvme1n1 /dev/sda /dev/sdb /dev/sdc /dev/xvda; do
         if [ ! -b "$candidate" ]; then
           continue
         fi
         DEVNAME="$(${pkgs.coreutils}/bin/basename "$candidate")"
         REMOVABLE="/sys/block/''${DEVNAME}/removable"
         if [ -f "$REMOVABLE" ] && [ "$(cat "$REMOVABLE")" = "1" ]; then
-          echo "[INFO] skipping removable device=$candidate"
+          echo "[INFO] skipping removable device=$candidate" >&2
           continue
         fi
         CDROM="/sys/block/''${DEVNAME}/device/type"
         if [ -f "$CDROM" ] && [ "$(cat "$CDROM")" = "5" ]; then
-          echo "[INFO] skipping cdrom device=$candidate"
+          echo "[INFO] skipping cdrom device=$candidate" >&2
           continue
         fi
-        DISK="$candidate"
-        break
+        echo "$candidate"
       done
-      if [ "$DISK" = "auto" ]; then
-        echo "[ERROR] no target disk found"
+    }
+
+    select_disk() {
+      local choice answer index=1
+      echo ""
+      echo "CSFX installer: every disk listed below will lose all data once selected."
+      for candidate in "$@"; do
+        echo "  [$index] $candidate"
+        lsblk -dno SIZE,MODEL "$candidate" | sed 's/^/        /'
+        lsblk -no NAME,FSTYPE,LABEL "$candidate" | tail -n +2 | sed 's/^/        /'
+        index=$((index + 1))
+      done
+      choice=1
+      if [ "$#" -gt 1 ]; then
+        read -r -p "Select target disk number: " choice
+      fi
+      case "$choice" in
+        ""|*[!0-9]*) echo "[ERROR] invalid selection"; exit 1 ;;
+      esac
+      DISK="$(printf '%s\n' "$@" | sed -n "''${choice}p")"
+      if [ -z "$DISK" ]; then
+        echo "[ERROR] invalid selection"
         exit 1
       fi
-      echo "[INFO] auto-detected disk=''${DISK}"
+      read -r -p "Type ERASE to wipe $DISK and install CSFX: " answer
+      if [ "$answer" != "ERASE" ]; then
+        echo "[ERROR] installation aborted by user disk=''${DISK}"
+        exit 1
+      fi
+    }
+
+    if [ "$DISK" = "auto" ]; then
+      mapfile -t CANDIDATES < <(list_candidates)
+    else
+      CANDIDATES=("$DISK")
+    fi
+
+    if [ "''${#CANDIDATES[@]}" -eq 0 ]; then
+      echo "[ERROR] no target disk found"
+      exit 1
+    fi
+
+    if grep -qw 'csfx.autoinstall=yes' /proc/cmdline; then
+      DISK="''${CANDIDATES[0]}"
+      echo "[WARN] unattended install selected by kernel parameter disk=''${DISK}"
+    else
+      select_disk "''${CANDIDATES[@]}"
     fi
 
     if [ -d /sys/firmware/efi/efivars ]; then
@@ -147,7 +188,7 @@ in
       description = "CSFX automated disk installer";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" "local-fs.target" ];
-      conflicts = [ "shutdown.target" ];
+      conflicts = [ "shutdown.target" "getty@tty1.service" "autovt@tty1.service" ];
 
       environment = {
         PATH = lib.mkForce (lib.concatStringsSep ":" [
@@ -160,6 +201,8 @@ in
           "${pkgs.systemd}/bin"
           "${pkgs.grub2}/bin"
           "${pkgs.nixos-install-tools}/bin"
+          "${pkgs.gnused}/bin"
+          "${pkgs.gnugrep}/bin"
         ]);
       };
 
@@ -168,6 +211,12 @@ in
         RemainAfterExit = true;
         ExecStart = installScript;
         User = "root";
+        Restart = "on-failure";
+        RestartSec = "5s";
+        StandardInput = "tty-force";
+        TTYPath = "/dev/tty1";
+        TTYReset = true;
+        TTYVHangup = true;
         StandardOutput = "journal+console";
         StandardError = "journal+console";
       };

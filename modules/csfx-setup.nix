@@ -1,4 +1,4 @@
-{ config, lib, pkgs, versions, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   cfg = config.services.csfx-setup;
@@ -157,15 +157,6 @@ let
     bind_to_data csfx-registry-mirror /var/lib/private/csfx-registry-mirror root:root csfx-registry-mirror.service
   '';
 
-  logoFile = pkgs.writeText "csfx-logo" ''
-     ██████╗███████╗███████╗██╗  ██╗
-    ██╔════╝██╔════╝██╔════╝╚██╗██╔╝
-    ██║     ███████╗█████╗   ╚███╔╝
-    ██║     ╚════██║██╔══╝   ██╔██╗
-    ╚██████╗███████║██║     ██╔╝ ██╗
-     ╚═════╝╚══════╝╚═╝     ╚═╝  ╚═╝
-  '';
-
 in
 {
   options.services.csfx-setup = {
@@ -186,9 +177,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    services.openssh.enable = lib.mkForce false;
-
-    users.users.root.hashedPassword = "$6$YafaIErlC0RdeFf0$971JnpA/Zjs0u/q5liqHQF4pAG3HyPCqus.ejj6VZXm.9FfUd5br0tdIWS9kiDh6H2bxqAtEPOU7sU8CO4mGF.";
+    users = {
+      mutableUsers = false;
+      allowNoPasswordLogin = true;
+      users.root.hashedPassword = "!";
+    };
 
     networking.firewall = {
       enable = true;
@@ -200,33 +193,7 @@ in
       printf "Run 'csfx-status' for control plane overview.\n\n"
     '';
 
-    environment.etc."issue".text = "";
-
-    services.getty.extraArgs = [ "--issue-file" "/run/csfx-issue" ];
-
     systemd.services = {
-      csfx-update-issue = {
-        description = "Write /run/csfx-issue with logo and IP after network is online";
-        wantedBy = [ "multi-user.target" ];
-        after = [ "network-online.target" ];
-        wants = [ "network-online.target" ];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          User = "root";
-          ExecStart = pkgs.writeShellScript "csfx-update-issue" ''
-            IP=$(${pkgs.iproute2}/bin/ip -4 addr show scope global 2>/dev/null \
-              | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}' \
-              | head -1)
-            {
-              ${pkgs.coreutils}/bin/cat ${logoFile}
-              printf 'CSFX Node -- v${versions.csfx.version}\n'
-              printf 'IP: %s\n\n' "''${IP:-unknown}"
-            } > /run/csfx-issue
-          '';
-        };
-      };
-
       csfx-disk-setup = {
         description = "CSFX first-boot disk partitioning and formatting";
         wantedBy = [ "multi-user.target" ];
@@ -320,11 +287,6 @@ in
             exit 1
           '';
         };
-      };
-
-      "getty@tty1" = {
-        after = [ "csfx-update-issue.service" ];
-        requires = [ "csfx-update-issue.service" ];
       };
     };
   };
