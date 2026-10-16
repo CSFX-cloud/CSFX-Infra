@@ -64,6 +64,8 @@ let
           '';
         } else null;
 
+  controlPlaneOnly.ConditionPathExists = "!${cfg.workerMarker}";
+
   commonEnv = {
     DATABASE_URL = cfg.dbUrl;
     ETCD_ENDPOINTS = cfg.etcdEndpoints;
@@ -74,6 +76,7 @@ let
     after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
     requires = [ "csfx-migrate.service" ] ++ requires;
     wantedBy = [ "multi-user.target" ];
+    unitConfig = controlPlaneOnly;
     serviceConfig = {
       ExecStart = "${bin}/bin/${binName}";
       Restart = "on-failure";
@@ -192,6 +195,13 @@ in
       description = "Path to environment file with secrets";
     };
 
+    workerMarker = lib.mkOption {
+      type = lib.types.str;
+      default = "/etc/csfx/worker";
+      readOnly = true;
+      description = "When this file exists the node runs only the agent and skips every control plane unit";
+    };
+
     gatewayPackage = lib.mkOption {
       type = lib.types.package;
       default = gatewayBin;
@@ -290,10 +300,13 @@ in
 
     systemd = {
       services = {
+        etcd.unitConfig = controlPlaneOnly;
+
         patroni = {
           after = [ "etcd.service" "network-online.target" ];
           wants = [ "network-online.target" ];
           requires = [ "etcd.service" ];
+          unitConfig = controlPlaneOnly;
         };
 
         csfx-db-init = {
@@ -301,6 +314,7 @@ in
           after = [ "network.target" "patroni.service" ];
           requires = [ "patroni.service" ];
           wantedBy = [ "multi-user.target" ];
+          unitConfig = controlPlaneOnly;
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -353,6 +367,7 @@ in
         csfx-setup-code = {
           description = "CSFX first-install setup code";
           wantedBy = [ "multi-user.target" ];
+          unitConfig = controlPlaneOnly;
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -369,6 +384,7 @@ in
           after = [ "network.target" "csfx-db-init.service" ];
           requires = [ "csfx-db-init.service" ];
           wantedBy = [ "multi-user.target" ];
+          unitConfig = controlPlaneOnly;
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -486,6 +502,7 @@ in
           after = [ "network-online.target" "etcd.service" ];
           wants = [ "network-online.target" ];
           requires = [ "etcd.service" ];
+          unitConfig = controlPlaneOnly;
           path = [ pkgs.git pkgs.nixos-rebuild pkgs.nix ];
           serviceConfig = {
             ExecStart = "${updaterBin}/bin/csfx-updater";

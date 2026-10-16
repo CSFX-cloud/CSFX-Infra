@@ -220,6 +220,7 @@ in
 
           serviceConfig = {
             ExecStart = "${agentBin}/bin/csfx-agent";
+            EnvironmentFile = "-/etc/csfx/agent-join.env";
             User = "csfx-agent";
             Group = "csfx-agent";
             Restart = "on-failure";
