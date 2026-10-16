@@ -110,6 +110,10 @@ let
         ready)
           printf 'Web UI: https://%s:8000\n\nPress ENTER for the console menu.\n' "$ip"
           ;;
+        worker)
+          printf 'Worker node. Managed from the cluster web UI.\n'
+          printf 'Agent: %s\n' "$(${pkgs.systemd}/bin/systemctl is-active csfx-agent.service)"
+          ;;
         *)
           if [ -z "$ip" ]; then
             printf 'No network address. Check cable and DHCP.\n'
@@ -117,7 +121,7 @@ let
           else
             printf 'CSFX is starting. This can take a few minutes.\n'
           fi
-          printf '\nPress ENTER for the console menu.\n'
+          printf '\nPress J to join an existing cluster instead.\n'
           ;;
       esac
     }
@@ -262,12 +266,13 @@ let
       ip=$(primary_ip)
       status=$($CURL -sk --max-time 3 https://localhost:8000/api/setup/status 2>/dev/null)
       state=$(printf '%s' "$status" | $JQ -r '.state // empty' 2>/dev/null)
+      [ -e ${config.services.csfx-cp.workerMarker} ] && state=worker
       draw_header "$ip"
       draw_state "$state" "$status" "$ip"
       if read -r -t 10 -s -n 1 key; then
-        if [ "$state" != "setup_required" ]; then
+        if [ "$state" = "ready" ]; then
           run_console
-        elif [ "$key" = "j" ] || [ "$key" = "J" ]; then
+        elif [ "$state" != "worker" ] && { [ "$key" = "j" ] || [ "$key" = "J" ]; }; then
           join_cluster
         fi
       fi
@@ -297,6 +302,8 @@ in
       users = [ "csfx-console" ];
       commands = [{ command = "${helper}"; options = [ "NOPASSWD" ]; }];
     }];
+
+    boot.kernelParams = [ "console=ttyS0,115200" "console=tty0" ];
 
     services.getty.autologinUser = "csfx-console";
     services.getty.helpLine = lib.mkForce "";
