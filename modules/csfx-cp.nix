@@ -71,8 +71,21 @@ let
     ETCD_ENDPOINTS = cfg.etcdEndpoints;
   };
 
-  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { } }: {
-    inherit description;
+  cephEnabled = cfg.ceph.monHosts != "";
+
+  cephEnv = lib.optionalAttrs cephEnabled ({
+    CEPH_MON_HOSTS = cfg.ceph.monHosts;
+    CEPH_CLIENT_NAME = cfg.ceph.clientName;
+  } // lib.optionalAttrs (cfg.ceph.keyringPath != null) {
+    CEPH_KEYRING = "%d/ceph.keyring";
+  });
+
+  cephServiceConfig = lib.optionalAttrs (cephEnabled && cfg.ceph.keyringPath != null) {
+    LoadCredential = "ceph.keyring:${toString cfg.ceph.keyringPath}";
+  };
+
+  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { }, path ? [ ] }: {
+    inherit description path;
     after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
     requires = [ "csfx-migrate.service" ] ++ requires;
     wantedBy = [ "multi-user.target" ];
@@ -193,6 +206,27 @@ in
       type = lib.types.path;
       default = "/etc/csfx/cp.env";
       description = "Path to environment file with secrets";
+    };
+
+    ceph = {
+      monHosts = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        example = "10.0.0.11:6789,10.0.0.12:6789,10.0.0.13:6789";
+        description = "Comma separated Ceph monitors, empty disables Ceph volumes";
+      };
+
+      clientName = lib.mkOption {
+        type = lib.types.str;
+        default = "admin";
+        description = "Ceph client name without the client. prefix";
+      };
+
+      keyringPath = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Keyring file handed to the volume manager as a service credential";
+      };
     };
 
     workerMarker = lib.mkOption {
@@ -438,6 +472,9 @@ in
           description = "CSFX Volume Manager";
           bin = volumeManagerBin;
           binName = "volume-manager";
+          path = lib.optionals cephEnabled [ pkgs.ceph-client ];
+          extraEnv = cephEnv;
+          extraServiceConfig = cephServiceConfig;
         };
 
         csfx-failover-controller = mkService {
