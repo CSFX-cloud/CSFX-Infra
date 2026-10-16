@@ -80,6 +80,7 @@ in
     systemd.services.garage = {
       after = [ "csfx-agent.service" "csfx-setup.service" ];
       requires = [ "csfx-agent.service" "csfx-setup.service" ];
+      unitConfig.ConditionPathExists = config.services.csfx-cp.controlPlaneConditions;
       serviceConfig = {
         DynamicUser = lib.mkForce false;
         User = "csfx-garage";

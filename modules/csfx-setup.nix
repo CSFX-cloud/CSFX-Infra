@@ -243,6 +243,7 @@ in
         wants = [ "network-online.target" ];
         requires = [ "csfx-mount-data.service" ];
         before = [ "csfx-migrate.service" ];
+        unitConfig.ConditionPathExists = config.services.csfx-cp.controlPlaneConditions;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
@@ -261,6 +262,7 @@ in
         wantedBy = [ "multi-user.target" ];
         after = [ "csfx-api-gateway.service" ];
         requires = [ "csfx-api-gateway.service" ];
+        unitConfig.ConditionPathExists = config.services.csfx-cp.controlPlaneConditions;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;

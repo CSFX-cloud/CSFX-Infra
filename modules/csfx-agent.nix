@@ -31,6 +31,14 @@ in
   options.services.csfx-agent = {
     enable = lib.mkEnableOption "CSFX agent daemon";
 
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = agentBin;
+      readOnly = true;
+      internal = true;
+      description = "Agent package, shared with the master join service";
+    };
+
     gatewayUrl = lib.mkOption {
       type = lib.types.str;
       description = "URL of the CSFX API gateway";
@@ -220,6 +228,7 @@ in
 
           serviceConfig = {
             ExecStart = "${agentBin}/bin/csfx-agent";
+            EnvironmentFile = "-/etc/csfx/agent-join.env";
             User = "csfx-agent";
             Group = "csfx-agent";
             Restart = "on-failure";

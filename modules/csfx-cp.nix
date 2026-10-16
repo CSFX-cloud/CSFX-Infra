@@ -64,16 +64,32 @@ let
           '';
         } else null;
 
+  controlPlaneOnly.ConditionPathExists = cfg.controlPlaneConditions;
+
   commonEnv = {
     DATABASE_URL = cfg.dbUrl;
     ETCD_ENDPOINTS = cfg.etcdEndpoints;
   };
 
-  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { } }: {
-    inherit description;
+  cephEnabled = cfg.ceph.monHosts != "";
+
+  cephEnv = lib.optionalAttrs cephEnabled ({
+    CEPH_MON_HOSTS = cfg.ceph.monHosts;
+    CEPH_CLIENT_NAME = cfg.ceph.clientName;
+  } // lib.optionalAttrs (cfg.ceph.keyringPath != null) {
+    CEPH_KEYRING = "%d/ceph.keyring";
+  });
+
+  cephServiceConfig = lib.optionalAttrs (cephEnabled && cfg.ceph.keyringPath != null) {
+    LoadCredential = "ceph.keyring:${toString cfg.ceph.keyringPath}";
+  };
+
+  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { }, path ? [ ] }: {
+    inherit description path;
     after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
     requires = [ "csfx-migrate.service" ] ++ requires;
     wantedBy = [ "multi-user.target" ];
+    unitConfig = controlPlaneOnly;
     serviceConfig = {
       ExecStart = "${bin}/bin/${binName}";
       Restart = "on-failure";
@@ -192,6 +208,49 @@ in
       description = "Path to environment file with secrets";
     };
 
+    ceph = {
+      monHosts = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        example = "10.0.0.11:6789,10.0.0.12:6789,10.0.0.13:6789";
+        description = "Comma separated Ceph monitors, empty disables Ceph volumes";
+      };
+
+      clientName = lib.mkOption {
+        type = lib.types.str;
+        default = "admin";
+        description = "Ceph client name without the client. prefix";
+      };
+
+      keyringPath = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Keyring file handed to the volume manager as a service credential";
+      };
+    };
+
+    workerMarker = lib.mkOption {
+      type = lib.types.str;
+      default = "/etc/csfx/worker";
+      readOnly = true;
+      description = "When this file exists the node runs only the agent and skips every control plane unit";
+    };
+
+    masterJoinPendingMarker = lib.mkOption {
+      type = lib.types.str;
+      default = "/etc/csfx/master-join-pending";
+      readOnly = true;
+      description = "While this file exists a joining master holds back every control plane unit until the join bundle is applied";
+    };
+
+    controlPlaneConditions = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "!${cfg.workerMarker}" "!${cfg.masterJoinPendingMarker}" ];
+      readOnly = true;
+      internal = true;
+      description = "ConditionPathExists entries every control plane unit shares";
+    };
+
     gatewayPackage = lib.mkOption {
       type = lib.types.package;
       default = gatewayBin;
@@ -290,10 +349,13 @@ in
 
     systemd = {
       services = {
+        etcd.unitConfig = controlPlaneOnly;
+
         patroni = {
           after = [ "etcd.service" "network-online.target" ];
           wants = [ "network-online.target" ];
           requires = [ "etcd.service" ];
+          unitConfig = controlPlaneOnly;
         };
 
         csfx-db-init = {
@@ -301,6 +363,7 @@ in
           after = [ "network.target" "patroni.service" ];
           requires = [ "patroni.service" ];
           wantedBy = [ "multi-user.target" ];
+          unitConfig = controlPlaneOnly;
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -310,6 +373,8 @@ in
               set -euo pipefail
 
               PSQL="${pkgs.postgresql_16}/bin/psql"
+              PGPASSWORD=$(cat /etc/csfx/patroni-superuser-password)
+              export PGPASSWORD
               TIMEOUT=60
               ELAPSED=0
 
@@ -353,6 +418,7 @@ in
         csfx-setup-code = {
           description = "CSFX first-install setup code";
           wantedBy = [ "multi-user.target" ];
+          unitConfig = controlPlaneOnly;
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -369,6 +435,7 @@ in
           after = [ "network.target" "csfx-db-init.service" ];
           requires = [ "csfx-db-init.service" ];
           wantedBy = [ "multi-user.target" ];
+          unitConfig = controlPlaneOnly;
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -386,7 +453,7 @@ in
           stateDirectory = "csfx-cp";
           after = [ "csfx-registry.service" "csfx-setup-code.service" ];
           requires = [ "csfx-registry.service" "csfx-setup-code.service" ];
-          extraServiceConfig.LoadCredential = "setup-code:${setupCodeFile}";
+          extraServiceConfig.LoadCredential = [ "setup-code:${setupCodeFile}" ];
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             VOLUME_MANAGER_URL = "http://localhost:8003";
@@ -422,6 +489,9 @@ in
           description = "CSFX Volume Manager";
           bin = volumeManagerBin;
           binName = "volume-manager";
+          path = lib.optionals cephEnabled [ pkgs.ceph-client ];
+          extraEnv = cephEnv;
+          extraServiceConfig = cephServiceConfig;
         };
 
         csfx-failover-controller = mkService {
@@ -486,6 +556,7 @@ in
           after = [ "network-online.target" "etcd.service" ];
           wants = [ "network-online.target" ];
           requires = [ "etcd.service" ];
+          unitConfig = controlPlaneOnly;
           path = [ pkgs.git pkgs.nixos-rebuild pkgs.nix ];
           serviceConfig = {
             ExecStart = "${updaterBin}/bin/csfx-updater";
