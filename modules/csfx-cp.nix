@@ -453,7 +453,7 @@ in
           stateDirectory = "csfx-cp";
           after = [ "csfx-registry.service" "csfx-setup-code.service" ];
           requires = [ "csfx-registry.service" "csfx-setup-code.service" ];
-          extraServiceConfig.LoadCredential = "setup-code:${setupCodeFile}";
+          extraServiceConfig.LoadCredential = [ "setup-code:${setupCodeFile}" ];
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             VOLUME_MANAGER_URL = "http://localhost:8003";

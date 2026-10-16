@@ -256,6 +256,17 @@ in
 
         keepalived = lib.mkIf (cfg.vip.address != null) clusterUnit;
 
+        csfx-api-gateway = {
+          environment = lib.mkIf (cfg.vip.address != null) {
+            TLS_SANS = "localhost,127.0.0.1,${cfg.vip.address}";
+          };
+          serviceConfig.LoadCredential = [
+            "garage-env:/etc/csfx/garage.env"
+            "patroni-superuser-password:/etc/csfx/patroni-superuser-password"
+            "patroni-replication-password:/etc/csfx/patroni-replication-password"
+          ];
+        };
+
         csfx-cluster-env = clusterUnit // {
           description = "CSFX cluster network environment";
           before = [ "etcd.service" "patroni.service" ];
