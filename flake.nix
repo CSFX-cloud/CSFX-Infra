@@ -25,6 +25,7 @@
         self.nixosModules.csfx-garage
         self.nixosModules.csfx-setup
         self.nixosModules.csfx-cluster
+        self.nixosModules.csfx-ingress
         self.nixosModules.csfx-console
         self.nixosModules.csfx-binary-cache
         self.nixosModules.csfx-registry-mirror
@@ -138,6 +139,7 @@
         csfx-registry-mirror = import ./modules/csfx-registry-mirror.nix;
         csfx-setup = import ./modules/csfx-setup.nix;
         csfx-cluster = import ./modules/csfx-cluster.nix;
+        csfx-ingress = import ./modules/csfx-ingress.nix;
         csfx-console = import ./modules/csfx-console.nix;
         csfx-autoinstall = import ./modules/csfx-autoinstall.nix;
         update-units = import ./modules/update-units.nix;
