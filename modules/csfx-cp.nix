@@ -64,7 +64,7 @@ let
           '';
         } else null;
 
-  controlPlaneOnly.ConditionPathExists = "!${cfg.workerMarker}";
+  controlPlaneOnly.ConditionPathExists = cfg.controlPlaneConditions;
 
   commonEnv = {
     DATABASE_URL = cfg.dbUrl;
@@ -236,6 +236,21 @@ in
       description = "When this file exists the node runs only the agent and skips every control plane unit";
     };
 
+    masterJoinPendingMarker = lib.mkOption {
+      type = lib.types.str;
+      default = "/etc/csfx/master-join-pending";
+      readOnly = true;
+      description = "While this file exists a joining master holds back every control plane unit until the join bundle is applied";
+    };
+
+    controlPlaneConditions = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "!${cfg.workerMarker}" "!${cfg.masterJoinPendingMarker}" ];
+      readOnly = true;
+      internal = true;
+      description = "ConditionPathExists entries every control plane unit shares";
+    };
+
     gatewayPackage = lib.mkOption {
       type = lib.types.package;
       default = gatewayBin;
@@ -358,6 +373,8 @@ in
               set -euo pipefail
 
               PSQL="${pkgs.postgresql_16}/bin/psql"
+              PGPASSWORD=$(cat /etc/csfx/patroni-superuser-password)
+              export PGPASSWORD
               TIMEOUT=60
               ELAPSED=0
 

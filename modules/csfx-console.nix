@@ -27,13 +27,16 @@ let
         ;;
       join-cluster)
         IFS= read -r join_string
-        if ! printf '%s' "$join_string" | ${pkgs.gnugrep}/bin/grep -Eq '^csfx-join\.[A-Za-z0-9.:-]+#csfx-bootstrap\.[a-f0-9]+#[a-f0-9]+$'; then
+        if ! printf '%s' "$join_string" | ${pkgs.gnugrep}/bin/grep -Eq '^csfx-join\.[A-Za-z0-9.:-]+#csfx-bootstrap\.[a-f0-9]+#[a-f0-9]+(#(worker|master))?$'; then
           echo "[ERROR] malformed join string" >&2
           exit 65
         fi
         umask 0077
         printf 'CSFX_JOIN=%s\n' "$join_string" > /etc/csfx/agent-join.env
-        : > ${config.services.csfx-cp.workerMarker}
+        case "$join_string" in
+          *'#master') : > ${config.services.csfx-cp.masterJoinPendingMarker} ;;
+          *) : > ${config.services.csfx-cp.workerMarker} ;;
+        esac
         ;;
       setup-code)
         exec ${pkgs.coreutils}/bin/cat /run/csfx/setup-code
