@@ -4,6 +4,81 @@ let
   cfg = config.services.csfx-console;
   gateway = "${config.services.csfx-cp.gatewayPackage}/bin/api-gateway";
 
+  diagnosticUnits = [
+    "csfx-join-apply"
+    "csfx-master-join"
+    "csfx-agent"
+    "csfx-cluster-env"
+    "etcd"
+    "patroni"
+    "csfx-haproxy"
+    "csfx-db-init"
+    "csfx-migrate"
+    "csfx-registry"
+    "csfx-api-gateway"
+  ];
+
+  diagnosticHelperCases = ''
+      pin-configured)
+        exec ${pkgs.coreutils}/bin/test -s /var/lib/csfx-cp/console-pin.json
+        ;;
+      diagnose-summary)
+        printf 'Failed units:\n'
+        ${pkgs.systemd}/bin/systemctl --failed --no-legend --plain || true
+        printf '\nMarkers:\n'
+        for marker in worker master-join-pending master-join-promote agent-join.env; do
+          if [ -e "/etc/csfx/$marker" ]; then state=present; else state=absent; fi
+          printf '  %-22s %s\n' "$marker" "$state"
+        done
+        printf '\nAgent registration:\n'
+        ${pkgs.jq}/bin/jq -r '"  id " + .agent_id + "\n  gateway " + .gateway_url' \
+          /var/lib/csfx-agent/config.json 2>/dev/null || printf '  not registered\n'
+        printf '\nUnits:\n'
+        for unit in ${lib.escapeShellArgs diagnosticUnits}; do
+          printf '  %-22s %s\n' "$unit" "$(${pkgs.systemd}/bin/systemctl is-active "$unit" 2>&1)"
+        done
+        ;;
+      diagnose-unit)
+        case "''${2:-}" in
+          ${lib.concatStringsSep "|" diagnosticUnits})
+            exec ${pkgs.systemd}/bin/journalctl -b --no-pager -o cat -n 40 -u "$2"
+            ;;
+          *)
+            echo "[ERROR] unit not allowed unit=''${2:-}" >&2
+            exit 64
+            ;;
+        esac
+        ;;
+  '';
+
+  diagnosticMenuFunction = ''
+    diagnostics() {
+      local units=(${lib.escapeShellArgs diagnosticUnits}) choice index unit
+      if $SUDO $HELPER pin-configured; then
+        authenticate || return 0
+      fi
+      log "event=console.diagnostics"
+      while true; do
+        clear_screen
+        $SUDO $HELPER diagnose-summary
+        printf '\nLogs of a unit:\n'
+        index=1
+        for unit in "''${units[@]}"; do
+          printf '  %2d  %s\n' "$index" "$unit"
+          index=$((index + 1))
+        done
+        read -r -p 'Number, empty to leave: ' choice
+        [ -n "$choice" ] || return 0
+        [[ "$choice" =~ ^[0-9]+$ ]] || continue
+        unit=''${units[$((choice - 1))]:-}
+        [ -n "$unit" ] || continue
+        clear_screen
+        $SUDO $HELPER diagnose-unit "$unit" || true
+        pause
+      done
+    }
+  '';
+
   logoFile = pkgs.writeText "csfx-logo" ''
      ██████╗███████╗███████╗██╗  ██╗
     ██╔════╝██╔════╝██╔════╝╚██╗██╔╝
@@ -25,7 +100,7 @@ let
         shift
         exec ${gateway} "$command" "$@"
         ;;
-      setup-code)
+${lib.optionalString cfg.diagnostics diagnosticHelperCases}      setup-code)
         exec ${pkgs.coreutils}/bin/cat /run/csfx/setup-code
         ;;
       reboot)
@@ -205,6 +280,7 @@ let
       show_recovery_key "$output"
     }
 
+${lib.optionalString cfg.diagnostics diagnosticMenuFunction}
     run_console() {
       local choice
       authenticate || return 0
@@ -239,10 +315,10 @@ let
       [ -e ${config.services.csfx-cp.workerMarker} ] && state=worker
       draw_header "$ip"
       draw_state "$state" "$status" "$ip"
-      if read -r -t 10 -s -n 1 key; then
-        if [ "$state" = "ready" ]; then
-          run_console
-        fi
+${lib.optionalString cfg.diagnostics "      printf '\\nPress D for diagnostics.\\n'\n"}      if read -r -t 10 -s -n 1 key; then
+        case "$key" in
+${lib.optionalString cfg.diagnostics "          d|D) diagnostics ;;\n"}          *) [ "$state" != "ready" ] || run_console ;;
+        esac
       fi
     done
   '') // { shellPath = "/bin/csfx-console-menu"; };
@@ -250,6 +326,12 @@ in
 {
   options.services.csfx-console = {
     enable = lib.mkEnableOption "CSFX restricted local console";
+
+    diagnostics = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Read only diagnostics screen on the console, set to false to remove it";
+    };
   };
 
   config = lib.mkIf cfg.enable {
