@@ -92,6 +92,7 @@
             enable = true;
             dataPart = "/dev/disk/by-label/csfx-data";
           };
+          csfx-cluster.enable = true;
           csfx-console.enable = true;
           csfx-garage.enable = true;
           csfx-binary-cache.enable = true;
