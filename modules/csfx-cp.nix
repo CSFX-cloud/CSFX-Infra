@@ -47,6 +47,40 @@ let
     echo "[INFO] setup code generated file=${setupCodeFile}"
   '';
 
+  joinRequestFile = "/var/lib/private/csfx-cp/join-request";
+
+  clusterModuleEnabled = lib.attrByPath [ "services" "csfx-cluster" "enable" ] false config;
+
+  joinApplyScript = pkgs.writeShellScript "csfx-join-apply" ''
+    set -euo pipefail
+
+    join_string=$(${pkgs.coreutils}/bin/cat ${joinRequestFile})
+    ${pkgs.coreutils}/bin/rm -f ${joinRequestFile}
+
+    if ! printf '%s' "$join_string" | ${pkgs.gnugrep}/bin/grep -Eq '^csfx-join\.[A-Za-z0-9.:-]+#csfx-bootstrap\.[a-f0-9]+#[a-f0-9]+(#(worker|master))?$'; then
+      echo "[ERROR] malformed join request"
+      exit 65
+    fi
+
+    case "$join_string" in
+      *'#master')
+        ${if clusterModuleEnabled then "" else ''
+        echo "[ERROR] master join requires services.csfx-cluster.enable"
+        exit 78
+        ''}
+        marker=${cfg.masterJoinPendingMarker}
+        ;;
+      *) marker=${cfg.workerMarker} ;;
+    esac
+
+    umask 0077
+    ${pkgs.coreutils}/bin/mkdir -p /etc/csfx
+    printf 'CSFX_JOIN=%s\n' "$join_string" > /etc/csfx/agent-join.env
+    : > "$marker"
+    echo "[INFO] join request applied marker=$marker"
+    exec ${pkgs.systemd}/bin/systemctl reboot
+  '';
+
   hasFrontend = v ? "frontend";
   frontendAssets =
     if hasFrontend then
@@ -417,6 +451,16 @@ in
           environment = { DATABASE_URL = cfg.dbUrl; };
         };
 
+        csfx-join-apply = {
+          description = "CSFX apply web join request";
+          unitConfig = controlPlaneOnly;
+          serviceConfig = {
+            Type = "oneshot";
+            User = "root";
+            ExecStart = joinApplyScript;
+          };
+        };
+
         csfx-setup-code = {
           description = "CSFX first-install setup code";
           wantedBy = [ "multi-user.target" ];
@@ -581,6 +625,12 @@ in
             HEALTH_CHECK_RETRY_INTERVAL_SECS = "5";
           };
         };
+      };
+
+      paths.csfx-join-apply = {
+        description = "CSFX web join request";
+        wantedBy = [ "multi-user.target" ];
+        pathConfig.PathExists = joinRequestFile;
       };
 
       tmpfiles.rules = [
