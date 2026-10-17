@@ -324,13 +324,18 @@ in
           after = [ "network-online.target" "csfx-agent.service" ];
           wants = [ "network-online.target" "csfx-agent.service" ];
           path = [ pkgs.coreutils pkgs.systemd ];
-          unitConfig.ConditionPathExists = [
-            "|${cp.masterJoinPendingMarker}"
-            "|/etc/csfx/master-join-promote"
-          ];
+          unitConfig = {
+            ConditionPathExists = [
+              "|${cp.masterJoinPendingMarker}"
+              "|/etc/csfx/master-join-promote"
+            ];
+            StartLimitIntervalSec = 0;
+          };
           serviceConfig = {
             Type = "oneshot";
             User = "root";
+            Restart = "on-failure";
+            RestartSec = "30s";
             TimeoutStartSec = "40min";
             EnvironmentFile = "/etc/csfx/agent-join.env";
             ExecStart = "${config.services.csfx-agent.package}/bin/csfx-agent --join-master";
