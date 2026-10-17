@@ -24,6 +24,9 @@ let
     if [ -f "$config" ]; then
       ip=$(${pkgs.jq}/bin/jq -r '.wg_tunnel_ip // empty' "$config")
     fi
+    if [ -n "$ip" ] && ! ${pkgs.iproute2}/bin/ip -4 addr show dev wgmgmt0 2>/dev/null | ${pkgs.gnugrep}/bin/grep -qF "inet $ip/"; then
+      ip=""
+    fi
 
     if [ -n "$ip" ]; then
       bind="0.0.0.0"
