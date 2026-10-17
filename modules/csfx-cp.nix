@@ -363,10 +363,12 @@ in
           after = [ "network.target" "patroni.service" ];
           requires = [ "patroni.service" ];
           wantedBy = [ "multi-user.target" ];
-          unitConfig = controlPlaneOnly;
+          unitConfig = controlPlaneOnly // { StartLimitIntervalSec = 0; };
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
+            Restart = "on-failure";
+            RestartSec = "5s";
             User = "root";
             EnvironmentFile = cfg.envFile;
             ExecStart = pkgs.writeShellScript "csfx-db-init" ''
@@ -379,7 +381,7 @@ in
               ELAPSED=0
 
               while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-                if "$PSQL" -U postgres -h 127.0.0.1 -c "SELECT 1" postgres > /dev/null 2>&1; then
+                if [ "$("$PSQL" -U postgres -h 127.0.0.1 -tAc "SELECT NOT pg_is_in_recovery()" postgres 2>/dev/null)" = "t" ]; then
                   break
                 fi
                 sleep 2
@@ -393,7 +395,7 @@ in
 
               DB_PASS=$(echo "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|')
 
-              "$PSQL" -U postgres -h 127.0.0.1 postgres <<SQL
+              "$PSQL" -v ON_ERROR_STOP=1 -U postgres -h 127.0.0.1 postgres <<SQL
               DO \$\$
               BEGIN
                 IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'csfx') THEN
@@ -406,7 +408,7 @@ in
               SELECT 'CREATE DATABASE csfx OWNER csfx' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'csfx')\gexec
               SQL
 
-              "$PSQL" -U postgres -h 127.0.0.1 csfx <<SQL
+              "$PSQL" -v ON_ERROR_STOP=1 -U postgres -h 127.0.0.1 csfx <<SQL
               GRANT ALL ON SCHEMA public TO csfx;
               ALTER SCHEMA public OWNER TO csfx;
               SQL
@@ -435,10 +437,12 @@ in
           after = [ "network.target" "csfx-db-init.service" ];
           requires = [ "csfx-db-init.service" ];
           wantedBy = [ "multi-user.target" ];
-          unitConfig = controlPlaneOnly;
+          unitConfig = controlPlaneOnly // { StartLimitIntervalSec = 0; };
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
+            Restart = "on-failure";
+            RestartSec = "5s";
             ExecStart = "${migrateBin}/bin/csfx-migrate";
             EnvironmentFile = cfg.envFile;
           };
