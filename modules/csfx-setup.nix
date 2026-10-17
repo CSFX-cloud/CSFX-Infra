@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, utils, ... }:
 
 let
   cfg = config.services.csfx-setup;
@@ -96,10 +96,6 @@ let
     mkdir -p "$MOUNT"
     ${pkgs.util-linux}/bin/mount "$PART" "$MOUNT"
     echo "[INFO] data partition mounted mount=''${MOUNT}"
-
-    ln -sfn "$MOUNT/postgresql" /var/lib/postgresql
-    ln -sfn "$MOUNT/csfx" /var/lib/csfx-persistent
-    ln -sfn "$MOUNT/csfx-updater" /var/lib/csfx-updater-data
   '';
 
   dataBindScript = pkgs.writeShellScript "csfx-data-binds" ''
@@ -198,10 +194,14 @@ in
         description = "CSFX first-boot disk partitioning and formatting";
         wantedBy = [ "multi-user.target" ];
         before = [ "csfx-mount-data.service" "patroni.service" "etcd.service" ];
-        after = [ "local-fs.target" ];
+        after = [ "local-fs.target" "${utils.escapeSystemdPath cfg.dataPart}.device" ];
+        wants = [ "${utils.escapeSystemdPath cfg.dataPart}.device" ];
+        unitConfig.StartLimitIntervalSec = 0;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
+          Restart = "on-failure";
+          RestartSec = "5s";
           ExecStart = diskSetupScript;
           User = "root";
         };
