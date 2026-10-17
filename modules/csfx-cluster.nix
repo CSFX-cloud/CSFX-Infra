@@ -7,6 +7,7 @@ let
   runDir = "/run/csfx-cluster";
   haproxyDir = "/run/csfx-haproxy";
   agentConfig = "/var/lib/csfx-agent/config.json";
+  joinEnvFile = "/etc/csfx/etcd-join.env";
   etcdEndpoint = "http://127.0.0.1:2379";
   patroniMemberPrefix = "/service/csfx/members/";
   etcdPort = 2379;
@@ -38,6 +39,14 @@ let
       client_urls="http://127.0.0.1:${toString etcdPort}"
     fi
 
+    member_name="${config.networking.hostName}"
+    if [ -f ${joinEnvFile} ]; then
+      joined_name=$(${pkgs.gnused}/bin/sed -n 's/^ETCD_NAME=//p' ${joinEnvFile})
+      if [ -n "$joined_name" ]; then
+        member_name="$joined_name"
+      fi
+    fi
+
     staging=$(${pkgs.coreutils}/bin/mktemp -d)
     trap '${pkgs.coreutils}/bin/rm -rf "$staging"' EXIT
 
@@ -47,6 +56,7 @@ let
     ETCD_LISTEN_PEER_URLS=http://$advertise:${toString etcdPeerPort}
     ETCD_INITIAL_ADVERTISE_PEER_URLS=http://$advertise:${toString etcdPeerPort}
     EOF
+    printf '%s' "$member_name" > "$staging/patroni-name"
     printf '%s' "$bind:${toString patroniApiPort}" > "$staging/patroni-restapi-listen"
     printf '%s' "$advertise:${toString patroniApiPort}" > "$staging/patroni-restapi-address"
     printf '%s' "$bind:${toString postgresPort}" > "$staging/patroni-postgresql-listen"
@@ -69,7 +79,7 @@ let
     ETCDCTL="${pkgs.etcd}/bin/etcdctl --endpoints=${etcdEndpoint}"
 
     if [ -n "$ip" ]; then
-      member=$($ETCDCTL member list | ${pkgs.gawk}/bin/awk -F', ' -v name="${config.networking.hostName}" '$3 == name { print $1 }')
+      member=$($ETCDCTL member list | ${pkgs.gawk}/bin/awk -F', ' -v name="$member_name" '$3 == name { print $1 }')
       if [ -n "$member" ]; then
         $ETCDCTL member update "$member" --peer-urls="http://$ip:${toString etcdPeerPort}"
       fi
@@ -206,6 +216,7 @@ in
       patroni = {
         postgresqlPort = postgresPort;
         environmentFiles = {
+          PATRONI_NAME = "${runDir}/patroni-name";
           PATRONI_RESTAPI_LISTEN = "${runDir}/patroni-restapi-listen";
           PATRONI_RESTAPI_CONNECT_ADDRESS = "${runDir}/patroni-restapi-address";
           PATRONI_POSTGRESQL_LISTEN = "${runDir}/patroni-postgresql-listen";
@@ -248,7 +259,7 @@ in
           after = [ "csfx-cluster-env.service" ];
           serviceConfig.EnvironmentFile = [
             "-${runDir}/etcd.env"
-            "-/etc/csfx/etcd-join.env"
+            "-${joinEnvFile}"
           ];
         };
 
