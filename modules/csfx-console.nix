@@ -25,19 +25,6 @@ let
         shift
         exec ${gateway} "$command" "$@"
         ;;
-      join-cluster)
-        IFS= read -r join_string
-        if ! printf '%s' "$join_string" | ${pkgs.gnugrep}/bin/grep -Eq '^csfx-join\.[A-Za-z0-9.:-]+#csfx-bootstrap\.[a-f0-9]+#[a-f0-9]+(#(worker|master))?$'; then
-          echo "[ERROR] malformed join string" >&2
-          exit 65
-        fi
-        umask 0077
-        printf 'CSFX_JOIN=%s\n' "$join_string" > /etc/csfx/agent-join.env
-        case "$join_string" in
-          *'#master') : > ${config.services.csfx-cp.masterJoinPendingMarker} ;;
-          *) : > ${config.services.csfx-cp.workerMarker} ;;
-        esac
-        ;;
       setup-code)
         exec ${pkgs.coreutils}/bin/cat /run/csfx/setup-code
         ;;
@@ -105,7 +92,7 @@ let
           printf 'Setup code:   %s\n\n' "$($SUDO $HELPER setup-code)"
           printf 'CA fingerprint (SHA-256), compare with the browser warning:\n%s\n' \
             "$(printf '%s' "$status" | $JQ -r '.ca_fingerprint // "unavailable"')"
-          printf '\nPress J to join an existing cluster instead.\n'
+          printf '\nTo join an existing cluster instead, choose the join option on the setup page.\n'
           ;;
         ready)
           printf 'Web UI: https://%s:8000\n\nPress ENTER for the console menu.\n' "$ip"
@@ -121,7 +108,6 @@ let
           else
             printf 'CSFX is starting. This can take a few minutes.\n'
           fi
-          printf '\nPress J to join an existing cluster instead.\n'
           ;;
       esac
     }
@@ -219,22 +205,6 @@ let
       show_recovery_key "$output"
     }
 
-    join_cluster() {
-      local join_string output
-      printf '\nJoin string: '
-      read -r join_string
-      [ -n "$join_string" ] || return 0
-      if ! output=$(printf '%s\n' "$join_string" | $SUDO $HELPER join-cluster 2>&1); then
-        printf 'Failed: %s\n' "$output"
-        pause
-        return 0
-      fi
-      log "event=console.cluster_join_requested"
-      printf 'Joining the cluster. The node reboots now.\n'
-      sleep 3
-      $SUDO $HELPER reboot
-    }
-
     run_console() {
       local choice
       authenticate || return 0
@@ -272,8 +242,6 @@ let
       if read -r -t 10 -s -n 1 key; then
         if [ "$state" = "ready" ]; then
           run_console
-        elif [ "$state" != "worker" ] && { [ "$key" = "j" ] || [ "$key" = "J" ]; }; then
-          join_cluster
         fi
       fi
     done

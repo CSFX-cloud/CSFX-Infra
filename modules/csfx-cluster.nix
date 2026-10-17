@@ -24,6 +24,9 @@ let
     if [ -f "$config" ]; then
       ip=$(${pkgs.jq}/bin/jq -r '.wg_tunnel_ip // empty' "$config")
     fi
+    if [ -n "$ip" ] && ! ${pkgs.iproute2}/bin/ip -4 addr show dev wgmgmt0 2>/dev/null | ${pkgs.gnugrep}/bin/grep -qF "inet $ip/"; then
+      ip=""
+    fi
 
     if [ -n "$ip" ]; then
       bind="0.0.0.0"
@@ -321,13 +324,18 @@ in
           after = [ "network-online.target" "csfx-agent.service" ];
           wants = [ "network-online.target" "csfx-agent.service" ];
           path = [ pkgs.coreutils pkgs.systemd ];
-          unitConfig.ConditionPathExists = [
-            "|${cp.masterJoinPendingMarker}"
-            "|/etc/csfx/master-join-promote"
-          ];
+          unitConfig = {
+            ConditionPathExists = [
+              "|${cp.masterJoinPendingMarker}"
+              "|/etc/csfx/master-join-promote"
+            ];
+            StartLimitIntervalSec = 0;
+          };
           serviceConfig = {
             Type = "oneshot";
             User = "root";
+            Restart = "on-failure";
+            RestartSec = "30s";
             TimeoutStartSec = "40min";
             EnvironmentFile = "/etc/csfx/agent-join.env";
             ExecStart = "${config.services.csfx-agent.package}/bin/csfx-agent --join-master";

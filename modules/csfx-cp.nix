@@ -47,6 +47,40 @@ let
     echo "[INFO] setup code generated file=${setupCodeFile}"
   '';
 
+  joinRequestFile = "/var/lib/private/csfx-cp/join-request";
+
+  clusterModuleEnabled = lib.attrByPath [ "services" "csfx-cluster" "enable" ] false config;
+
+  joinApplyScript = pkgs.writeShellScript "csfx-join-apply" ''
+    set -euo pipefail
+
+    join_string=$(${pkgs.coreutils}/bin/cat ${joinRequestFile})
+    ${pkgs.coreutils}/bin/rm -f ${joinRequestFile}
+
+    if ! printf '%s' "$join_string" | ${pkgs.gnugrep}/bin/grep -Eq '^csfx-join\.[A-Za-z0-9.:-]+#csfx-bootstrap\.[a-f0-9]+#[a-f0-9]+(#(worker|master))?$'; then
+      echo "[ERROR] malformed join request"
+      exit 65
+    fi
+
+    case "$join_string" in
+      *'#master')
+        ${if clusterModuleEnabled then "" else ''
+        echo "[ERROR] master join requires services.csfx-cluster.enable"
+        exit 78
+        ''}
+        marker=${cfg.masterJoinPendingMarker}
+        ;;
+      *) marker=${cfg.workerMarker} ;;
+    esac
+
+    umask 0077
+    ${pkgs.coreutils}/bin/mkdir -p /etc/csfx
+    printf 'CSFX_JOIN=%s\n' "$join_string" > /etc/csfx/agent-join.env
+    : > "$marker"
+    echo "[INFO] join request applied marker=$marker"
+    exec ${pkgs.systemd}/bin/systemctl reboot
+  '';
+
   hasFrontend = v ? "frontend";
   frontendAssets =
     if hasFrontend then
@@ -363,10 +397,12 @@ in
           after = [ "network.target" "patroni.service" ];
           requires = [ "patroni.service" ];
           wantedBy = [ "multi-user.target" ];
-          unitConfig = controlPlaneOnly;
+          unitConfig = controlPlaneOnly // { StartLimitIntervalSec = 0; };
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
+            Restart = "on-failure";
+            RestartSec = "5s";
             User = "root";
             EnvironmentFile = cfg.envFile;
             ExecStart = pkgs.writeShellScript "csfx-db-init" ''
@@ -379,7 +415,7 @@ in
               ELAPSED=0
 
               while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-                if "$PSQL" -U postgres -h 127.0.0.1 -c "SELECT 1" postgres > /dev/null 2>&1; then
+                if [ "$("$PSQL" -U postgres -h 127.0.0.1 -tAc "SELECT NOT pg_is_in_recovery()" postgres 2>/dev/null)" = "t" ]; then
                   break
                 fi
                 sleep 2
@@ -393,7 +429,7 @@ in
 
               DB_PASS=$(echo "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|')
 
-              "$PSQL" -U postgres -h 127.0.0.1 postgres <<SQL
+              "$PSQL" -v ON_ERROR_STOP=1 -U postgres -h 127.0.0.1 postgres <<SQL
               DO \$\$
               BEGIN
                 IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'csfx') THEN
@@ -406,13 +442,23 @@ in
               SELECT 'CREATE DATABASE csfx OWNER csfx' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'csfx')\gexec
               SQL
 
-              "$PSQL" -U postgres -h 127.0.0.1 csfx <<SQL
+              "$PSQL" -v ON_ERROR_STOP=1 -U postgres -h 127.0.0.1 csfx <<SQL
               GRANT ALL ON SCHEMA public TO csfx;
               ALTER SCHEMA public OWNER TO csfx;
               SQL
             '';
           };
           environment = { DATABASE_URL = cfg.dbUrl; };
+        };
+
+        csfx-join-apply = {
+          description = "CSFX apply web join request";
+          unitConfig = controlPlaneOnly;
+          serviceConfig = {
+            Type = "oneshot";
+            User = "root";
+            ExecStart = joinApplyScript;
+          };
         };
 
         csfx-setup-code = {
@@ -435,10 +481,12 @@ in
           after = [ "network.target" "csfx-db-init.service" ];
           requires = [ "csfx-db-init.service" ];
           wantedBy = [ "multi-user.target" ];
-          unitConfig = controlPlaneOnly;
+          unitConfig = controlPlaneOnly // { StartLimitIntervalSec = 0; };
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
+            Restart = "on-failure";
+            RestartSec = "5s";
             ExecStart = "${migrateBin}/bin/csfx-migrate";
             EnvironmentFile = cfg.envFile;
           };
@@ -577,6 +625,12 @@ in
             HEALTH_CHECK_RETRY_INTERVAL_SECS = "5";
           };
         };
+      };
+
+      paths.csfx-join-apply = {
+        description = "CSFX web join request";
+        wantedBy = [ "multi-user.target" ];
+        pathConfig.PathExists = joinRequestFile;
       };
 
       tmpfiles.rules = [
