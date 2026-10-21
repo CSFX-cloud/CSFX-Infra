@@ -68,6 +68,16 @@ in
       description = "Port the agent's inbound HTTP server (logs, exec, power, metrics stream) listens on. Must match the port the control plane uses to reach this agent over the management tunnel.";
     };
 
+    advertiseInterface = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "eth0";
+      description = ''
+        Network interface whose IPv4 address the agent advertises to the control plane, for the management tunnel and for the DNS records of gateways.
+        Null uses the address of the default route. Set it on hosts with several networks. Ignored when wgEndpoint is set.
+      '';
+    };
+
     enableSsh = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -111,6 +121,21 @@ in
       description = "Path to the Ceph client keyring file for this node";
     };
 
+    localDns = {
+      zone = lib.mkOption {
+        type = lib.types.str;
+        default = "csfx.internal";
+        description = "Platform DNS zone, must match services.csfx-ingress.localZone on the masters.";
+      };
+
+      servers = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [ "192.168.1.10" "192.168.1.11" ];
+        description = "Master addresses that serve the platform zone, workloads resolve the zone through their resource group resolver which forwards here. Empty disables the forwarding.";
+      };
+    };
+
     registryMirror = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -129,6 +154,10 @@ in
     networking.firewall = {
       allowedUDPPorts = [ 51820 ];
       interfaces."wgmgmt0".allowedTCPPorts = [ cfg.agentPort ];
+      interfaces."csfxrg+" = {
+        allowedTCPPorts = [ 53 cfg.agentPort ];
+        allowedUDPPorts = [ 53 ];
+      };
     };
 
     boot.kernelModules = [ "wireguard" ]
@@ -252,6 +281,8 @@ in
             CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
           } // lib.optionalAttrs (cfg.wgEndpoint != null) {
             CSFX_WG_ENDPOINT = cfg.wgEndpoint;
+          } // lib.optionalAttrs (cfg.advertiseInterface != null) {
+            CSFX_ADVERTISE_INTERFACE = cfg.advertiseInterface;
           } // lib.optionalAttrs (cfg.cephMonHosts != "") {
             CEPH_MON_HOSTS = cfg.cephMonHosts;
             CEPH_CLIENT_NAME = cfg.cephClientName;
@@ -263,6 +294,9 @@ in
             CSFX_QEMU_BIN_PATH = "${pkgs.qemu_kvm}/bin/qemu-system-x86_64";
           } // lib.optionalAttrs (cfg.registryMirror != null) {
             CSFX_REGISTRY_MIRROR = cfg.registryMirror;
+          } // lib.optionalAttrs (cfg.localDns.servers != [ ]) {
+            CSFX_LOCAL_ZONE = cfg.localDns.zone;
+            CSFX_LOCAL_DNS_SERVERS = lib.concatStringsSep "," cfg.localDns.servers;
           };
         };
 
