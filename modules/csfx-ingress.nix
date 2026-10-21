@@ -100,6 +100,7 @@ in
 
       csfx-api-gateway.environment = {
         CSFX_LOCAL_ZONE = cfg.localZone;
+        CSFX_LOCAL_DNS_ADDRESSES = lib.concatStringsSep "," (lib.filter (address: address != "127.0.0.1" && address != "0.0.0.0") cfg.dnsListenAddresses);
       } // lib.optionalAttrs (cfg.acmeEmail != null) {
         INGRESS_CERT_RESOLVER = certResolver;
         INGRESS_ACME_EMAIL = cfg.acmeEmail;
