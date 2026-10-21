@@ -3,12 +3,42 @@
 let
   cfg = config.services.csfx-ingress;
   cp = config.services.csfx-cp;
+  vipAddress = config.services.csfx-cluster.vip.address;
   certResolver = "letsencrypt";
   acmeStorage = "${config.services.traefik.dataDir}/acme.json";
+  corefile = ''
+    ${cfg.localZone}:53 {
+      bind ${lib.concatStringsSep " " cfg.dnsListenAddresses}
+      etcd ${cfg.localZone} {
+        path /skydns
+        endpoint http://127.0.0.1:2379
+      }
+      cache 10
+      errors
+    }
+  '';
 in
 {
   options.services.csfx-ingress = {
-    enable = lib.mkEnableOption "CSFX ingress, a Traefik instance that follows the ingress routes stored in etcd";
+    enable = lib.mkEnableOption "CSFX ingress, the platform Traefik and a CoreDNS that serves the local zone from etcd";
+
+    localZone = lib.mkOption {
+      type = lib.types.str;
+      default = "csfx.internal";
+      example = "csfx.internal";
+      description = ''
+        DNS zone that CoreDNS serves from the records the control plane keeps in etcd, gateway endpoints and routes inside the zone resolve to the agent running the gateway.
+        Avoid the local suffix, it is reserved for multicast DNS.
+      '';
+    };
+
+    dnsListenAddresses = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "127.0.0.1" ] ++ lib.optional (vipAddress != null) vipAddress;
+      defaultText = lib.literalExpression ''[ "127.0.0.1" ] ++ the floating address when one is configured'';
+      example = [ "127.0.0.1" "192.168.1.50" ];
+      description = "Addresses CoreDNS binds, explicit addresses keep it clear of the per resource group resolvers that agents run on the same host.";
+    };
 
     acmeEmail = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
@@ -22,7 +52,17 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    networking.firewall.allowedTCPPorts = [ 80 443 ];
+    networking.firewall = {
+      allowedTCPPorts = [ 53 80 443 ];
+      allowedUDPPorts = [ 53 ];
+    };
+
+    boot.kernel.sysctl."net.ipv4.ip_nonlocal_bind" = 1;
+
+    services.coredns = {
+      enable = true;
+      config = corefile;
+    };
 
     services.traefik = {
       enable = true;
@@ -52,8 +92,17 @@ in
         unitConfig.ConditionPathExists = cp.controlPlaneConditions;
       };
 
-      csfx-api-gateway.environment = lib.mkIf (cfg.acmeEmail != null) {
+      coredns = {
+        after = [ "etcd.service" ];
+        wants = [ "etcd.service" ];
+        unitConfig.ConditionPathExists = cp.controlPlaneConditions;
+      };
+
+      csfx-api-gateway.environment = {
+        CSFX_LOCAL_ZONE = cfg.localZone;
+      } // lib.optionalAttrs (cfg.acmeEmail != null) {
         INGRESS_CERT_RESOLVER = certResolver;
+        INGRESS_ACME_EMAIL = cfg.acmeEmail;
       };
     };
   };
