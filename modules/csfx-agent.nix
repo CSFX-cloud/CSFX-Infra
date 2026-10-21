@@ -68,6 +68,16 @@ in
       description = "Port the agent's inbound HTTP server (logs, exec, power, metrics stream) listens on. Must match the port the control plane uses to reach this agent over the management tunnel.";
     };
 
+    advertiseInterface = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "eth0";
+      description = ''
+        Network interface whose IPv4 address the agent advertises to the control plane, for the management tunnel and for the DNS records of gateways.
+        Null uses the address of the default route. Set it on hosts with several networks. Ignored when wgEndpoint is set.
+      '';
+    };
+
     enableSsh = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -271,6 +281,8 @@ in
             CSFX_REGISTRATION_TOKEN = cfg.registrationToken;
           } // lib.optionalAttrs (cfg.wgEndpoint != null) {
             CSFX_WG_ENDPOINT = cfg.wgEndpoint;
+          } // lib.optionalAttrs (cfg.advertiseInterface != null) {
+            CSFX_ADVERTISE_INTERFACE = cfg.advertiseInterface;
           } // lib.optionalAttrs (cfg.cephMonHosts != "") {
             CEPH_MON_HOSTS = cfg.cephMonHosts;
             CEPH_CLIENT_NAME = cfg.cephClientName;
