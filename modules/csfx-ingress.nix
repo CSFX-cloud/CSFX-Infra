@@ -93,8 +93,8 @@ in
       };
 
       coredns = {
-        after = [ "etcd.service" ];
-        wants = [ "etcd.service" ];
+        after = [ "etcd.service" "network-online.target" ];
+        wants = [ "etcd.service" "network-online.target" ];
         unitConfig.ConditionPathExists = cp.controlPlaneConditions;
       };
 
