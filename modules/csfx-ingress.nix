@@ -36,8 +36,8 @@ in
       type = lib.types.listOf lib.types.str;
       default = [ "127.0.0.1" ] ++ lib.optional (vipAddress != null) vipAddress;
       defaultText = lib.literalExpression ''[ "127.0.0.1" ] ++ the floating address when one is configured'';
-      example = [ "127.0.0.1" "192.168.1.50" ];
-      description = "Addresses CoreDNS binds, explicit addresses keep it clear of the per resource group resolvers that agents run on the same host.";
+      example = [ "127.0.0.1" "192.168.1.50" "eth0" ];
+      description = "Addresses or interface names CoreDNS binds. Never use a wildcard address on a host that also runs an agent, the per resource group resolvers bind their own gateway address on port 53 and fail while the wildcard is taken.";
     };
 
     acmeEmail = lib.mkOption {
