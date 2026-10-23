@@ -169,7 +169,11 @@ jobs:
           BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
           if gh release view "${TAG}" --repo "$REPO" > /dev/null 2>&1; then
-            gh release upload "${TAG}" --repo "$REPO" *.iso *.sha256 --clobber
+            for attempt in 1 2 3 4 5; do
+              gh release upload "${TAG}" --repo "$REPO" *.iso *.sha256 --clobber && break
+              [ "$attempt" -eq 5 ] && exit 1
+              sleep $((attempt * 15))
+            done
           else
             gh release create "${TAG}" \
               --title "v${VERSION}" \
@@ -214,7 +218,11 @@ jobs:
           BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
           if gh release view "${TAG}" > /dev/null 2>&1; then
-            gh release upload "${TAG}" *.iso *.sha256 --clobber
+            for attempt in 1 2 3 4 5; do
+              gh release upload "${TAG}" *.iso *.sha256 --clobber && break
+              [ "$attempt" -eq 5 ] && exit 1
+              sleep $((attempt * 15))
+            done
           else
             gh release create "${TAG}" \
               --title "v${VERSION}" \
