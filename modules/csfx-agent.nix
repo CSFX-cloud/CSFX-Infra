@@ -339,6 +339,8 @@ in
 
     systemd.services.sshd.wantedBy = lib.mkIf cfg.enableSsh (lib.mkForce [ ]);
 
+    systemd.services."serial-getty@ttyS0".enable = false;
+
     users.users.csfx = lib.mkIf cfg.enableSsh {
       isNormalUser = true;
       group = "csfx";
