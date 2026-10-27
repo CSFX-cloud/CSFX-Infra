@@ -12,6 +12,7 @@ let
   mount = "${pkgs.util-linux}/bin/mount";
   mkdir = "${pkgs.coreutils}/bin/mkdir";
   sleep = "${pkgs.coreutils}/bin/sleep";
+  whiptail = "${pkgs.newt}/bin/whiptail";
 
   installScript = pkgs.writeShellScript "csfx-autoinstall" ''
     set -euo pipefail
@@ -40,7 +41,7 @@ let
     }
 
     select_disk() {
-      local choice answer index=1
+      local choice index=1
       echo ""
       echo "CSFX installer: every disk listed below will lose all data once selected."
       for candidate in "$@"; do
@@ -61,8 +62,7 @@ let
         echo "[ERROR] invalid selection"
         exit 1
       fi
-      read -r -p "Type ERASE to wipe $DISK and install CSFX: " answer
-      if [ "$answer" != "ERASE" ]; then
+      if ! ${whiptail} --title "CSFX installer" --defaultno --yesno "Erase $DISK and install CSFX?\n\nAll data on this disk will be lost." 10 60; then
         echo "[ERROR] installation aborted by user disk=''${DISK}"
         exit 1
       fi
