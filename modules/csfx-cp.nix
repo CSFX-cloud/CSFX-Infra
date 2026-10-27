@@ -419,7 +419,8 @@ in
 
               DB_PASS=$(echo "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|')
 
-              "$PSQL" -v ON_ERROR_STOP=1 -U postgres -h 127.0.0.1 postgres <<SQL
+              init_database() {
+                "$PSQL" -v ON_ERROR_STOP=1 -U postgres -h 127.0.0.1 postgres <<SQL || return 1
               DO \$\$
               BEGIN
                 IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'csfx') THEN
@@ -432,10 +433,15 @@ in
               SELECT 'CREATE DATABASE csfx OWNER csfx' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'csfx')\gexec
               SQL
 
-              "$PSQL" -v ON_ERROR_STOP=1 -U postgres -h 127.0.0.1 csfx <<SQL
+                "$PSQL" -v ON_ERROR_STOP=1 -U postgres -h 127.0.0.1 csfx <<SQL
               GRANT ALL ON SCHEMA public TO csfx;
               ALTER SCHEMA public OWNER TO csfx;
               SQL
+              }
+
+              until init_database; do
+                sleep 2
+              done
             '';
           };
           environment = { DATABASE_URL = cfg.dbUrl; };
