@@ -79,9 +79,10 @@ let
     ETCDCTL="${pkgs.etcd}/bin/etcdctl --endpoints=${etcdEndpoint}"
 
     if [ -n "$ip" ]; then
-      member=$($ETCDCTL member list | ${pkgs.gawk}/bin/awk -F', ' -v name="$member_name" '$3 == name { print $1 }')
+      member=$($ETCDCTL member list 2>/dev/null | ${pkgs.gawk}/bin/awk -F', ' -v name="$member_name" '$3 == name { print $1 }' || true)
       if [ -n "$member" ]; then
-        $ETCDCTL member update "$member" --peer-urls="http://$ip:${toString etcdPeerPort}"
+        $ETCDCTL member update "$member" --peer-urls="http://$ip:${toString etcdPeerPort}" \
+          || echo "[WARN] etcd member update failed member=$member"
       fi
     fi
 
