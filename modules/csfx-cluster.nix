@@ -15,6 +15,69 @@ let
   postgresPort = 5433;
   patroniApiPort = 8008;
   meshCidr = "10.100.0.0/16";
+  clusterEnvFile = "/etc/csfx/cluster.env";
+  promoteMarker = "/etc/csfx/master-join-promote";
+  keepalivedDir = "/run/csfx-keepalived";
+
+  vipHealthScript = pkgs.writeShellScript "csfx-vip-health" ''
+    [ ! -e ${cp.masterJoinPendingMarker} ]
+    [ ! -e ${promoteMarker} ]
+    ${pkgs.curl}/bin/curl -sfk --max-time 3 https://localhost:8000/api/public-key > /dev/null
+    ${pkgs.etcd}/bin/etcdctl --endpoints=http://127.0.0.1:2379 endpoint health > /dev/null
+  '';
+
+  vipConfigScript = pkgs.writeShellScript "csfx-keepalived-config" ''
+    set -euo pipefail
+
+    address="${toString cfg.vip.address}"
+    prefix="${toString cfg.vip.prefixLength}"
+    router="${toString cfg.vip.routerId}"
+    interface="${cfg.vip.interface}"
+    if [ -f ${clusterEnvFile} ]; then
+      set -a
+      . ${clusterEnvFile}
+      set +a
+      address="''${CSFX_VIP_ADDRESS:-$address}"
+      prefix="''${CSFX_VIP_PREFIX:-$prefix}"
+      router="''${CSFX_VIP_ROUTER_ID:-$router}"
+    fi
+
+    [ -n "$address" ] || exit 1
+    [ "''${1:-write}" = "write" ] || exit 0
+
+    if [ -z "$interface" ]; then
+      interface=$(${pkgs.iproute2}/bin/ip -o route get "$address" | ${pkgs.gnused}/bin/sed -n 's/.* dev \([^ ]*\).*/\1/p' | ${pkgs.coreutils}/bin/head -n 1)
+    fi
+
+    cat > ${keepalivedDir}/keepalived.conf <<EOF
+    global_defs {
+      script_user root
+    }
+
+    vrrp_script csfx_health {
+      script "${vipHealthScript}"
+      interval 5
+      timeout 5
+      fall 2
+      rise 2
+    }
+
+    vrrp_instance csfx {
+      state BACKUP
+      nopreempt
+      interface $interface
+      virtual_router_id $router
+      priority 100
+      advert_int 1
+      virtual_ipaddress {
+        $address/$prefix dev $interface
+      }
+      track_script {
+        csfx_health
+      }
+    }
+    EOF
+  '';
 
   clusterEnvScript = pkgs.writeShellScript "csfx-cluster-env" ''
     set -euo pipefail
@@ -56,6 +119,9 @@ let
     ETCD_LISTEN_PEER_URLS=http://$advertise:${toString etcdPeerPort}
     ETCD_INITIAL_ADVERTISE_PEER_URLS=http://$advertise:${toString etcdPeerPort}
     EOF
+    if [ ! -f ${joinEnvFile} ]; then
+      printf 'ETCD_INITIAL_CLUSTER=%s=http://%s:%s\n' "$member_name" "$advertise" "${toString etcdPeerPort}" >> "$staging/etcd.env"
+    fi
     printf '%s' "$member_name" > "$staging/patroni-name"
     printf '%s' "$bind:${toString patroniApiPort}" > "$staging/patroni-restapi-listen"
     printf '%s' "$advertise:${toString patroniApiPort}" > "$staging/patroni-restapi-address"
@@ -166,7 +232,7 @@ let
     "csfx-updater.service"
     "garage.service"
     "csfx-cp-ready.service"
-    "keepalived.service"
+    "csfx-keepalived.service"
   ];
 in
 {
@@ -190,7 +256,7 @@ in
         type = lib.types.str;
         default = "";
         example = "eth0";
-        description = "Interface that carries the floating address, requires a layer 2 segment shared by all masters";
+        description = "Interface that carries the floating address, derived from the route to the address when empty, requires a layer 2 segment shared by all masters";
       };
 
       routerId = lib.mkOption {
@@ -201,14 +267,9 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    assertions = [{
-      assertion = cfg.vip.address == null || cfg.vip.interface != "";
-      message = "services.csfx-cluster.vip.interface must be set when vip.address is set";
-    }];
-
     networking.firewall = {
       interfaces.wgmgmt0.allowedTCPPorts = [ etcdPort etcdPeerPort postgresPort patroniApiPort ];
-      extraCommands = lib.mkIf (cfg.vip.address != null) ''
+      extraCommands = ''
         iptables -A nixos-fw -p vrrp -j nixos-fw-accept
       '';
     };
@@ -231,26 +292,6 @@ in
           "host all all ${meshCidr} md5"
         ];
       };
-
-      keepalived = lib.mkIf (cfg.vip.address != null) {
-        enable = true;
-        vrrpScripts.csfx-health = {
-          script = "${pkgs.writeShellScript "csfx-vip-health" ''
-            ${pkgs.curl}/bin/curl -sfk --max-time 3 https://localhost:8000/api/public-key > /dev/null
-            ${pkgs.etcd}/bin/etcdctl --endpoints=${etcdEndpoint} endpoint health > /dev/null
-          ''}";
-          interval = 5;
-          fall = 2;
-          rise = 2;
-        };
-        vrrpInstances.csfx = {
-          interface = cfg.vip.interface;
-          virtualRouterId = cfg.vip.routerId;
-          priority = 100;
-          virtualIps = [{ addr = "${cfg.vip.address}/${toString cfg.vip.prefixLength}"; }];
-          trackScripts = [ "csfx-health" ];
-        };
-      };
     };
 
     systemd = {
@@ -269,12 +310,44 @@ in
           after = [ "csfx-cluster-env.service" ];
         };
 
-        keepalived = lib.mkIf (cfg.vip.address != null) clusterUnit;
+        csfx-keepalived = clusterUnit // {
+          description = "CSFX floating address";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "network-online.target" "csfx-cluster-env.service" ];
+          wants = [ "network-online.target" ];
+          serviceConfig = {
+            RuntimeDirectory = "csfx-keepalived";
+            ExecCondition = "${vipConfigScript} check";
+            ExecStartPre = "${vipConfigScript} write";
+            ExecStart = "${pkgs.keepalived}/sbin/keepalived --dont-fork --log-console --use-file=${keepalivedDir}/keepalived.conf";
+            Restart = "on-failure";
+            RestartSec = "5s";
+          };
+        };
+
+        csfx-mgmt-up = {
+          description = "CSFX management interface";
+          wantedBy = [ "multi-user.target" ];
+          before = [ "csfx-cluster-env.service" "etcd.service" ];
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          path = [ pkgs.iproute2 pkgs.wireguard-tools ];
+          unitConfig.ConditionPathExists = agentConfig;
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${config.services.csfx-agent.package}/bin/csfx-agent --mgmt-up";
+          };
+        };
 
         csfx-api-gateway = {
           environment = lib.mkIf (cfg.vip.address != null) {
             TLS_SANS = "localhost,127.0.0.1,${cfg.vip.address}";
+            CSFX_VIP_ADDRESS = cfg.vip.address;
+            CSFX_VIP_PREFIX = toString cfg.vip.prefixLength;
+            CSFX_VIP_ROUTER_ID = toString cfg.vip.routerId;
           };
+          serviceConfig.EnvironmentFile = lib.mkForce [ cp.envFile "-${clusterEnvFile}" ];
           serviceConfig.LoadCredential = [
             "garage-env:/etc/csfx/garage.env"
             "patroni-superuser-password:/etc/csfx/patroni-superuser-password"
