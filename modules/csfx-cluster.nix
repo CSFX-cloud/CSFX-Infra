@@ -339,7 +339,7 @@ in
           after = [ "network-online.target" ];
           wants = [ "network-online.target" ];
           path = [ pkgs.iproute2 pkgs.wireguard-tools ];
-          unitConfig.ConditionPathExists = agentConfig;
+          unitConfig.ConditionPathExists = [ agentConfig "!${cp.masterJoinPendingMarker}" ];
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
