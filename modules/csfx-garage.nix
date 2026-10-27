@@ -37,6 +37,13 @@ in
       description = "Bind address for the Garage admin API, used by the CSFX object-storage control-plane service";
     };
 
+    replicationFactor = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 1;
+      example = 3;
+      description = "Copies of every object. Garage fixes this when the cluster is created and every node must use the same value, set 3 before the first start of a three master cluster.";
+    };
+
     secretsFile = lib.mkOption {
       type = lib.types.path;
       default = "/etc/csfx/garage.env";
@@ -59,7 +66,7 @@ in
         data_dir = cfg.dataDir;
         metadata_dir = cfg.metadataDir;
         db_engine = "lmdb";
-        replication_factor = 1;
+        replication_factor = cfg.replicationFactor;
         compression_level = 1;
 
         rpc_bind_addr = "0.0.0.0:3901";

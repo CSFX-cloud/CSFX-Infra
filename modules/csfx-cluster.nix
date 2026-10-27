@@ -303,6 +303,7 @@ in
     systemd = {
       services = {
         etcd = {
+          environment.ETCD_MAX_LEARNERS = "3";
           requires = [ "csfx-cluster-env.service" ];
           after = [ "csfx-cluster-env.service" ];
           serviceConfig.EnvironmentFile = [
