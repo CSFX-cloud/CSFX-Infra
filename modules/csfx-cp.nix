@@ -403,6 +403,7 @@ in
             RemainAfterExit = true;
             Restart = "on-failure";
             RestartSec = "5s";
+            TimeoutStartSec = "infinity";
             User = "root";
             EnvironmentFile = cfg.envFile;
             ExecStart = pkgs.writeShellScript "csfx-db-init" ''
@@ -411,21 +412,10 @@ in
               PSQL="${pkgs.postgresql_16}/bin/psql"
               PGPASSWORD=$(cat /etc/csfx/patroni-superuser-password)
               export PGPASSWORD
-              TIMEOUT=60
-              ELAPSED=0
 
-              while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-                if [ "$("$PSQL" -U postgres -h 127.0.0.1 -tAc "SELECT NOT pg_is_in_recovery()" postgres 2>/dev/null)" = "t" ]; then
-                  break
-                fi
+              until [ "$("$PSQL" -U postgres -h 127.0.0.1 -tAc "SELECT NOT pg_is_in_recovery()" postgres 2>/dev/null)" = "t" ]; do
                 sleep 2
-                ELAPSED=$((ELAPSED + 2))
               done
-
-              if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
-                echo "[ERROR] postgres not ready after timeout elapsed=''${TIMEOUT}s"
-                exit 1
-              fi
 
               DB_PASS=$(echo "$DATABASE_URL" | sed 's|.*://[^:]*:\([^@]*\)@.*|\1|')
 
