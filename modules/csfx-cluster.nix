@@ -19,10 +19,16 @@ let
   promoteMarker = "/etc/csfx/master-join-promote";
   keepalivedDir = "/run/csfx-keepalived";
 
+  vipEnvironment = {
+    CSFX_VIP_ADDRESS = toString cfg.vip.address;
+    CSFX_VIP_PREFIX = toString cfg.vip.prefixLength;
+    CSFX_VIP_ROUTER_ID = toString cfg.vip.routerId;
+  };
+
   vipHealthScript = pkgs.writeShellScript "csfx-vip-health" ''
     [ ! -e ${cp.masterJoinPendingMarker} ]
     [ ! -e ${promoteMarker} ]
-    ${pkgs.curl}/bin/curl -sfk --max-time 3 https://localhost:8000/api/public-key > /dev/null
+    ${pkgs.curl}/bin/curl -sfk --max-time 3 https://localhost:8000/api/ready > /dev/null
     ${pkgs.etcd}/bin/etcdctl --endpoints=http://127.0.0.1:2379 endpoint health > /dev/null
   '';
 
@@ -340,13 +346,15 @@ in
           };
         };
 
+        csfx-registry = {
+          environment = lib.mkIf (cfg.vip.address != null) vipEnvironment;
+          serviceConfig.EnvironmentFile = lib.mkForce [ cp.envFile "-${clusterEnvFile}" ];
+        };
+
         csfx-api-gateway = {
-          environment = lib.mkIf (cfg.vip.address != null) {
+          environment = lib.mkIf (cfg.vip.address != null) (vipEnvironment // {
             TLS_SANS = "localhost,127.0.0.1,${cfg.vip.address}";
-            CSFX_VIP_ADDRESS = cfg.vip.address;
-            CSFX_VIP_PREFIX = toString cfg.vip.prefixLength;
-            CSFX_VIP_ROUTER_ID = toString cfg.vip.routerId;
-          };
+          });
           serviceConfig.EnvironmentFile = lib.mkForce [ cp.envFile "-${clusterEnvFile}" ];
           serviceConfig.LoadCredential = [
             "garage-env:/etc/csfx/garage.env"
