@@ -52,7 +52,7 @@ let
       done
       choice=1
       if [ "$#" -gt 1 ]; then
-        read -r -p "Select target disk number: " choice
+        read -r -p "Select target disk number: " choice 2> /dev/tty
       fi
       case "$choice" in
         ""|*[!0-9]*) echo "[ERROR] invalid selection"; exit 1 ;;
@@ -62,7 +62,7 @@ let
         echo "[ERROR] invalid selection"
         exit 1
       fi
-      if ! ${whiptail} --title "CSFX installer" --defaultno --yesno "Erase $DISK and install CSFX?\n\nAll data on this disk will be lost." 10 60; then
+      if ! ${whiptail} --title "CSFX installer" --defaultno --yesno "Erase $DISK and install CSFX?\n\nAll data on this disk will be lost." 10 60 > /dev/tty; then
         echo "[ERROR] installation aborted by user disk=''${DISK}"
         exit 1
       fi
@@ -204,6 +204,21 @@ in
           "${pkgs.gnused}/bin"
           "${pkgs.gnugrep}/bin"
         ]);
+        TERM = "linux";
+        NEWT_COLORS = lib.concatStringsSep ";" [
+          "root=white,black"
+          "window=white,black"
+          "border=white,black"
+          "shadow=black,black"
+          "title=white,black"
+          "textbox=white,black"
+          "button=black,white"
+          "actbutton=black,cyan"
+          "compactbutton=white,black"
+          "roottext=white,black"
+          "emptyscale=,black"
+          "fullscale=,white"
+        ];
       };
 
       serviceConfig = {
