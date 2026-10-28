@@ -2,6 +2,7 @@
 
 let
   cfg = config.services.csfx-garage;
+  clusterVipAddress = lib.attrByPath [ "services" "csfx-cluster" "vip" "address" ] null config;
 in
 {
   options.services.csfx-garage = {
@@ -37,6 +38,13 @@ in
       description = "Bind address for the Garage admin API, used by the CSFX object-storage control-plane service";
     };
 
+    replicationFactor = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = if clusterVipAddress != null then 3 else 1;
+      example = 3;
+      description = "Copies of every object. Garage fixes this when the cluster is created and every node must use the same value. Defaults to 3 when a cluster vip is configured, joining masters take GARAGE_REPLICATION_FACTOR from the secrets file instead.";
+    };
+
     secretsFile = lib.mkOption {
       type = lib.types.path;
       default = "/etc/csfx/garage.env";
@@ -59,7 +67,7 @@ in
         data_dir = cfg.dataDir;
         metadata_dir = cfg.metadataDir;
         db_engine = "lmdb";
-        replication_factor = 1;
+        replication_factor = cfg.replicationFactor;
         compression_level = 1;
 
         rpc_bind_addr = "0.0.0.0:3901";
@@ -110,7 +118,8 @@ in
               | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 
             ${pkgs.gnused}/bin/sed \
-              "s|^rpc_public_addr = .*|rpc_public_addr = \"''${TUNNEL_IP}:3901\"|" \
+              -e "s|^rpc_public_addr = .*|rpc_public_addr = \"''${TUNNEL_IP}:3901\"|" \
+              -e "s|^replication_factor = .*|replication_factor = ''${GARAGE_REPLICATION_FACTOR:-${toString cfg.replicationFactor}}|" \
               /etc/garage.toml > "$RUNTIME_CONFIG"
 
             echo "[INFO] garage rpc_public_addr set tunnel_ip=''${TUNNEL_IP}"

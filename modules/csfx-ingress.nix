@@ -1,4 +1,4 @@
-{ config, lib, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   cfg = config.services.csfx-ingress;
@@ -6,9 +6,25 @@ let
   vipAddress = config.services.csfx-cluster.vip.address;
   certResolver = "letsencrypt";
   acmeStorage = "${config.services.traefik.dataDir}/acme.json";
+  clusterEnvFile = "/etc/csfx/cluster.env";
+  bindDir = "/run/csfx-coredns";
+  bindFile = "${bindDir}/bind";
+  bindScript = pkgs.writeShellScript "csfx-coredns-bind" ''
+    set -euo pipefail
+
+    addresses="${lib.concatStringsSep " " cfg.dnsListenAddresses}"
+    if [ -f ${clusterEnvFile} ]; then
+      vip=$(${pkgs.gnused}/bin/sed -n 's/^CSFX_VIP_ADDRESS=//p' ${clusterEnvFile})
+      case " $addresses " in
+        *" $vip "*) ;;
+        *) [ -z "$vip" ] || addresses="$addresses $vip" ;;
+      esac
+    fi
+    echo "bind $addresses" > ${bindFile}
+  '';
   corefile = ''
     ${cfg.localZone}:53 {
-      bind ${lib.concatStringsSep " " cfg.dnsListenAddresses}
+      import ${bindFile}
       etcd ${cfg.localZone} {
         path /skydns
         endpoint http://127.0.0.1:2379
@@ -96,6 +112,10 @@ in
         after = [ "etcd.service" "network-online.target" ];
         wants = [ "etcd.service" "network-online.target" ];
         unitConfig.ConditionPathExists = cp.controlPlaneConditions;
+        serviceConfig = {
+          RuntimeDirectory = "csfx-coredns";
+          ExecStartPre = [ "+${bindScript}" ];
+        };
       };
 
       csfx-api-gateway.environment = {
