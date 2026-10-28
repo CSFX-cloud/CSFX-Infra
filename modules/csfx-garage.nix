@@ -2,6 +2,7 @@
 
 let
   cfg = config.services.csfx-garage;
+  clusterVipAddress = lib.attrByPath [ "services" "csfx-cluster" "vip" "address" ] null config;
 in
 {
   options.services.csfx-garage = {
@@ -39,9 +40,9 @@ in
 
     replicationFactor = lib.mkOption {
       type = lib.types.ints.positive;
-      default = 1;
+      default = if clusterVipAddress != null then 3 else 1;
       example = 3;
-      description = "Copies of every object. Garage fixes this when the cluster is created and every node must use the same value, set 3 before the first start of a three master cluster.";
+      description = "Copies of every object. Garage fixes this when the cluster is created and every node must use the same value. Defaults to 3 when a cluster vip is configured, joining masters take GARAGE_REPLICATION_FACTOR from the secrets file instead.";
     };
 
     secretsFile = lib.mkOption {
@@ -117,7 +118,8 @@ in
               | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 
             ${pkgs.gnused}/bin/sed \
-              "s|^rpc_public_addr = .*|rpc_public_addr = \"''${TUNNEL_IP}:3901\"|" \
+              -e "s|^rpc_public_addr = .*|rpc_public_addr = \"''${TUNNEL_IP}:3901\"|" \
+              -e "s|^replication_factor = .*|replication_factor = ''${GARAGE_REPLICATION_FACTOR:-${toString cfg.replicationFactor}}|" \
               /etc/garage.toml > "$RUNTIME_CONFIG"
 
             echo "[INFO] garage rpc_public_addr set tunnel_ip=''${TUNNEL_IP}"
