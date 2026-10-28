@@ -412,6 +412,18 @@ in
           };
         };
 
+        csfx-vip-sync = clusterUnit // {
+          description = "CSFX floating address sync";
+          after = [ "network-online.target" "csfx-agent.service" ];
+          wants = [ "network-online.target" ];
+          path = [ pkgs.systemd ];
+          serviceConfig = {
+            Type = "oneshot";
+            User = "root";
+            ExecStart = "${config.services.csfx-agent.package}/bin/csfx-agent --sync-vip";
+          };
+        };
+
         csfx-master-join = {
           description = "CSFX master join";
           wantedBy = [ "multi-user.target" ];
@@ -443,6 +455,14 @@ in
           timerConfig = {
             OnBootSec = "30s";
             OnUnitActiveSec = "15s";
+          };
+        };
+
+        csfx-vip-sync = {
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnBootSec = "60s";
+            OnUnitActiveSec = "30s";
           };
         };
 
