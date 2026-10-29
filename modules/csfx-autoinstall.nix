@@ -184,6 +184,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    boot = {
+      consoleLogLevel = 0;
+      kernelParams = [ "systemd.show_status=false" ];
+    };
+
     systemd.services.csfx-autoinstall = {
       description = "CSFX automated disk installer";
       wantedBy = [ "multi-user.target" ];
