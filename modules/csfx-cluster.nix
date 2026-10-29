@@ -306,10 +306,14 @@ in
           environment.ETCD_MAX_LEARNERS = "3";
           requires = [ "csfx-cluster-env.service" ];
           after = [ "csfx-cluster-env.service" ];
-          serviceConfig.EnvironmentFile = [
-            "-${runDir}/etcd.env"
-            "-${joinEnvFile}"
-          ];
+          serviceConfig = {
+            EnvironmentFile = [
+              "-${runDir}/etcd.env"
+              "-${joinEnvFile}"
+            ];
+            TimeoutStartSec = "infinity";
+            ExecStartPost = "+${pkgs.systemd}/bin/systemctl --no-block start csfx-cp.target";
+          };
         };
 
         patroni = {
