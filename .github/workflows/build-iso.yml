@@ -6,10 +6,6 @@ on:
       - main
     paths:
       - "versions.nix"
-      - "flake.nix"
-      - "flake.lock"
-      - "modules/**"
-      - ".github/workflows/build-iso.yml"
   workflow_dispatch:
 
 permissions:
