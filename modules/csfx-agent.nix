@@ -46,7 +46,7 @@ in
 
     heartbeatInterval = lib.mkOption {
       type = lib.types.int;
-      default = 60;
+      default = 30;
       description = "Heartbeat interval in seconds";
     };
 
