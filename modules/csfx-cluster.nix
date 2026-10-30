@@ -421,6 +421,7 @@ in
           after = [ "network-online.target" "csfx-agent.service" ];
           wants = [ "network-online.target" ];
           path = [ pkgs.systemd ];
+          environment.CSFX_GATEWAY_URL = config.services.csfx-agent.gatewayUrl;
           serviceConfig = {
             Type = "oneshot";
             User = "root";
