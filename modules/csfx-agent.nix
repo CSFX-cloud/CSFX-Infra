@@ -332,9 +332,15 @@ in
         PasswordAuthentication = false;
         KbdInteractiveAuthentication = false;
         AllowUsers = [ "csfx" ];
-        AuthorizedKeysCommand = "${agentBin}/bin/csfx-agent --authorized-keys %u";
+        AuthorizedKeysCommand = "/run/wrappers/bin/csfx-authorized-keys --authorized-keys %u";
         AuthorizedKeysCommandUser = "csfx-agent";
       };
+    };
+
+    security.wrappers.csfx-authorized-keys = lib.mkIf cfg.enableSsh {
+      source = "${agentBin}/bin/csfx-agent";
+      owner = "root";
+      group = "root";
     };
 
     systemd.services.sshd.wantedBy = lib.mkIf cfg.enableSsh (lib.mkForce [ ]);
