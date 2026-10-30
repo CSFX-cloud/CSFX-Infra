@@ -242,6 +242,12 @@ in
       description = "Path to environment file with secrets";
     };
 
+    schedulerStrategy = lib.mkOption {
+      type = lib.types.enum [ "spread" "binpack" ];
+      default = "spread";
+      description = "Workload placement strategy. spread balances load across nodes, binpack fills nodes densely.";
+    };
+
     ceph = {
       monHosts = lib.mkOption {
         type = lib.types.str;
@@ -526,6 +532,7 @@ in
           binName = "scheduler";
           extraEnv = {
             API_GATEWAY_URL = "https://localhost:8000";
+            SCHEDULER_STRATEGY = cfg.schedulerStrategy;
           };
         };
 
