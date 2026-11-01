@@ -167,6 +167,14 @@ let
       current_key_id = "${sealKeyId}"
       current_key = "file://${runDir}/seal-key"
     }
+
+    audit "file" "csfx" {
+      description = "csfx audit log"
+      options {
+        file_path = "${auditDir}/audit.log"
+        mode = "0600"
+      }
+    }
     EOF
       for peer in $peers; do
         cat <<EOF
@@ -256,9 +264,12 @@ let
     wait_until 60 initialized
     BAO_TOKEN=$(${pkgs.jq}/bin/jq -r '.root_token' ${initFile})
     export BAO_TOKEN
-    ${bao} secrets enable -path=csfx-kv -version=2 kv
-    ${bao} auth enable approle
-    ${bao} audit enable file file_path=${auditDir}/audit.log mode=0600
+    if ! ${bao} secrets list -format=json | ${pkgs.jq}/bin/jq -e '."csfx-kv/"' > /dev/null; then
+      ${bao} secrets enable -path=csfx-kv -version=2 kv
+    fi
+    if ! ${bao} auth list -format=json | ${pkgs.jq}/bin/jq -e '."approle/"' > /dev/null; then
+      ${bao} auth enable approle
+    fi
     ${bao} policy write csfx-gateway ${gatewayPolicy}
     ${bao} write auth/approle/role/csfx-gateway token_policies=csfx-gateway token_ttl=1h token_max_ttl=24h \
       token_bound_cidrs=127.0.0.1/32,${meshCidr} secret_id_bound_cidrs=127.0.0.1/32,${meshCidr} secret_id_num_uses=0 secret_id_ttl=0
