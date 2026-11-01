@@ -159,6 +159,7 @@ let
     bind_to_data csfx-agent/firecracker /var/lib/csfx-agent/firecracker csfx-agent:csfx-agent csfx-agent.service qemu
     bind_to_data csfx-garage /var/lib/csfx-garage root:root garage.service
     bind_to_data csfx-registry-mirror /var/lib/private/csfx-registry-mirror root:root csfx-registry-mirror.service
+    bind_to_data csfx-site-registry /var/lib/private/csfx-site-registry root:root csfx-site-registry.service
   '';
 
 in
@@ -234,7 +235,7 @@ in
         wantedBy = [ "multi-user.target" ];
         after = [ "csfx-mount-data.service" ];
         requires = [ "csfx-mount-data.service" ];
-        before = [ "csfx-agent.service" "garage.service" "csfx-registry-mirror.service" ];
+        before = [ "csfx-agent.service" "garage.service" "csfx-registry-mirror.service" "csfx-site-registry.service" ];
         path = [ pkgs.coreutils pkgs.util-linux pkgs.findutils pkgs.systemd ];
         serviceConfig = {
           Type = "oneshot";

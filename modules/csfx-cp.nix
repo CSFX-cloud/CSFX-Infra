@@ -200,6 +200,7 @@ let
       "csfx-sdn-controller:8005:SDN Controller"
       "csfx-object-storage:8006:Object Storage"
       "csfx-site-builder:8007:Site Builder"
+      "csfx-site-registry:5060:Site Registry"
       "csfx-agent::Agent"
       "csfx-updater::Updater"
     )
