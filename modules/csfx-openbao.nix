@@ -34,17 +34,14 @@ let
     path "csfx-kv/*" {
       capabilities = ["create", "read", "update", "patch", "delete", "list"]
     }
-    path "sys/policies/acl/csfx-rg-*" {
+    path "sys/policies/acl/csfx-vault-*" {
       capabilities = ["create", "read", "update", "delete"]
     }
-    path "auth/approle/role/csfx-rg-*" {
+    path "auth/approle/role/csfx-vault-*" {
       capabilities = ["create", "read", "update", "delete"]
     }
-    path "auth/approle/role/csfx-rg-*/*" {
+    path "auth/approle/role/csfx-vault-*/*" {
       capabilities = ["create", "read", "update", "delete", "list"]
-    }
-    path "sys/wrapping/lookup" {
-      capabilities = ["update"]
     }
   '';
 
