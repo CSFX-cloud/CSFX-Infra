@@ -149,6 +149,7 @@ let
     services=(
       "patroni:5432:PostgreSQL HA"
       "etcd:2379:etcd"
+      "csfx-openbao:8200:OpenBao"
       "csfx-db-init::DB Init"
       "csfx-migrate::DB Migration"
       "csfx-api-gateway:8000:API Gateway"

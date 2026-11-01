@@ -25,6 +25,7 @@
         self.nixosModules.csfx-garage
         self.nixosModules.csfx-setup
         self.nixosModules.csfx-cluster
+        self.nixosModules.csfx-openbao
         self.nixosModules.csfx-ingress
         self.nixosModules.csfx-console
         self.nixosModules.csfx-binary-cache
@@ -93,6 +94,7 @@
             dataPart = "/dev/disk/by-label/csfx-data";
           };
           csfx-cluster.enable = true;
+          csfx-openbao.enable = true;
           csfx-console.enable = true;
           csfx-garage.enable = true;
           csfx-binary-cache.enable = true;
@@ -140,6 +142,7 @@
         csfx-registry-mirror = import ./modules/csfx-registry-mirror.nix;
         csfx-setup = import ./modules/csfx-setup.nix;
         csfx-cluster = import ./modules/csfx-cluster.nix;
+        csfx-openbao = import ./modules/csfx-openbao.nix;
         csfx-ingress = import ./modules/csfx-ingress.nix;
         csfx-console = import ./modules/csfx-console.nix;
         csfx-autoinstall = import ./modules/csfx-autoinstall.nix;
