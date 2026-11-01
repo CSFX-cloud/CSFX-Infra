@@ -166,10 +166,11 @@ let
     LoadCredential = "ceph.keyring:${toString cfg.ceph.keyringPath}";
   };
 
-  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { }, path ? [ ] }: {
+  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], wants ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { }, path ? [ ] }: {
     inherit description path;
     after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
     requires = [ "csfx-migrate.service" ] ++ requires;
+    inherit wants;
     wantedBy = [ "multi-user.target" ];
     unitConfig = controlPlaneOnly;
     serviceConfig = {
@@ -556,6 +557,7 @@ in
           stateDirectory = "csfx-cp";
           after = [ "csfx-registry.service" "csfx-setup-code.service" "csfx-site-env.service" ];
           requires = [ "csfx-registry.service" "csfx-setup-code.service" ];
+          wants = lib.optional hasSiteBuilder "csfx-site-env.service";
           extraServiceConfig = {
             LoadCredential = [ "setup-code:${setupCodeFile}" ];
           } // lib.optionalAttrs hasSiteBuilder {
