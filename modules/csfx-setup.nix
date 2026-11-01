@@ -45,6 +45,12 @@ let
 
         DONE_FILE="/var/lib/csfx-data/csfx/.setup-complete"
         ENV_FILE="/etc/csfx/cp.env"
+        JOIN_ENV_FILE="/etc/csfx/etcd-join.env"
+
+        if [ -f "$ENV_FILE" ] && [ ! -f "$JOIN_ENV_FILE" ] && ! ${pkgs.gnugrep}/bin/grep -q '^CSFX_SITE_SECRET=' "$ENV_FILE"; then
+          printf 'CSFX_SITE_SECRET=%s\n' "$(${pkgs.openssl}/bin/openssl rand -hex 32)" >> "$ENV_FILE"
+          echo "[INFO] site secret added file=$ENV_FILE"
+        fi
 
         if [ -f "$DONE_FILE" ]; then
           exit 0
@@ -59,6 +65,7 @@ let
         GARAGE_ADMIN_TOKEN=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         GARAGE_RPC_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         OBJECT_STORAGE_ENCRYPTION_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+        SITE_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
 
         cat > "$ENV_FILE" <<EOF
     DATABASE_URL=postgres://csfx:$DB_PASSWORD@localhost:5432/csfx
@@ -66,6 +73,7 @@ let
     ETCD_ENDPOINTS=http://localhost:2379
     GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN_TOKEN
     OBJECT_STORAGE_ENCRYPTION_KEY=$OBJECT_STORAGE_ENCRYPTION_KEY
+    CSFX_SITE_SECRET=$SITE_SECRET
     EOF
         chmod 0600 "$ENV_FILE"
 
