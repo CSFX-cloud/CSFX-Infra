@@ -30,6 +30,7 @@
         self.nixosModules.csfx-console
         self.nixosModules.csfx-binary-cache
         self.nixosModules.csfx-registry-mirror
+        self.nixosModules.csfx-site-registry
         self.nixosModules.update-units
       ];
 
@@ -99,6 +100,7 @@
           csfx-garage.enable = true;
           csfx-binary-cache.enable = true;
           csfx-registry-mirror.enable = true;
+          csfx-site-registry.enable = true;
           csfx-update-units = {
             enable = true;
             nixCacheUrl = "http://localhost:5000";
@@ -140,6 +142,7 @@
         csfx-garage = import ./modules/csfx-garage.nix;
         csfx-binary-cache = import ./modules/csfx-binary-cache.nix;
         csfx-registry-mirror = import ./modules/csfx-registry-mirror.nix;
+        csfx-site-registry = import ./modules/csfx-site-registry.nix;
         csfx-setup = import ./modules/csfx-setup.nix;
         csfx-cluster = import ./modules/csfx-cluster.nix;
         csfx-openbao = import ./modules/csfx-openbao.nix;

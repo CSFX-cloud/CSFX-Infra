@@ -45,6 +45,12 @@ let
 
         DONE_FILE="/var/lib/csfx-data/csfx/.setup-complete"
         ENV_FILE="/etc/csfx/cp.env"
+        JOIN_ENV_FILE="/etc/csfx/etcd-join.env"
+
+        if [ -f "$ENV_FILE" ] && [ ! -f "$JOIN_ENV_FILE" ] && ! ${pkgs.gnugrep}/bin/grep -q '^CSFX_SITE_SECRET=' "$ENV_FILE"; then
+          printf 'CSFX_SITE_SECRET=%s\n' "$(${pkgs.openssl}/bin/openssl rand -hex 32)" >> "$ENV_FILE"
+          echo "[INFO] site secret added file=$ENV_FILE"
+        fi
 
         if [ -f "$DONE_FILE" ]; then
           exit 0
@@ -59,6 +65,7 @@ let
         GARAGE_ADMIN_TOKEN=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         GARAGE_RPC_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         OBJECT_STORAGE_ENCRYPTION_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+        SITE_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
 
         cat > "$ENV_FILE" <<EOF
     DATABASE_URL=postgres://csfx:$DB_PASSWORD@localhost:5432/csfx
@@ -66,6 +73,7 @@ let
     ETCD_ENDPOINTS=http://localhost:2379
     GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN_TOKEN
     OBJECT_STORAGE_ENCRYPTION_KEY=$OBJECT_STORAGE_ENCRYPTION_KEY
+    CSFX_SITE_SECRET=$SITE_SECRET
     EOF
         chmod 0600 "$ENV_FILE"
 
@@ -151,6 +159,7 @@ let
     bind_to_data csfx-agent/firecracker /var/lib/csfx-agent/firecracker csfx-agent:csfx-agent csfx-agent.service qemu
     bind_to_data csfx-garage /var/lib/csfx-garage root:root garage.service
     bind_to_data csfx-registry-mirror /var/lib/private/csfx-registry-mirror root:root csfx-registry-mirror.service
+    bind_to_data csfx-site-registry /var/lib/private/csfx-site-registry root:root csfx-site-registry.service
   '';
 
 in
@@ -226,7 +235,7 @@ in
         wantedBy = [ "multi-user.target" ];
         after = [ "csfx-mount-data.service" ];
         requires = [ "csfx-mount-data.service" ];
-        before = [ "csfx-agent.service" "garage.service" "csfx-registry-mirror.service" ];
+        before = [ "csfx-agent.service" "garage.service" "csfx-registry-mirror.service" "csfx-site-registry.service" ];
         path = [ pkgs.coreutils pkgs.util-linux pkgs.findutils pkgs.systemd ];
         serviceConfig = {
           Type = "oneshot";

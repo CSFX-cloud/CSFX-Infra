@@ -29,6 +29,8 @@ let
   sdnBin = mkBin "sdn-controller" cp."sdn-controller";
   hasObjectStorage = cp ? "object-storage";
   objectStorageBin = if hasObjectStorage then mkBin "object-storage" cp."object-storage" else null;
+  hasSiteBuilder = cp ? "site-builder";
+  siteBuilderBin = if hasSiteBuilder then mkBin "site-builder" cp."site-builder" else null;
   hasUpdater = cp ? "csfx-updater";
   updaterBin = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
 
@@ -100,6 +102,52 @@ let
 
   controlPlaneOnly.ConditionPathExists = cfg.controlPlaneConditions;
 
+  siteEnvFile = "/run/csfx-site/site.env";
+  clusterEnvPath = "/etc/csfx/cluster.env";
+  siteBuilderPort = 8007;
+  siteEdgePort = 8010;
+  siteRegistryPort = 5060;
+  mirrorPort = 5050;
+
+  advertiseInterface = lib.attrByPath [ "services" "csfx-agent" "advertiseInterface" ] null config;
+
+  primaryAddressScript = pkgs.writeShellScript "csfx-primary-address" ''
+    set -euo pipefail
+
+    interface=${lib.escapeShellArg (toString advertiseInterface)}
+
+    if [ -n "$interface" ]; then
+      ip=$(${pkgs.iproute2}/bin/ip -4 -o addr show dev "$interface" scope global 2>/dev/null \
+        | ${pkgs.gawk}/bin/awk '{split($4, address, "/"); print address[1]; exit}')
+    else
+      ip=$(${pkgs.iproute2}/bin/ip -4 route get 1.1.1.1 2>/dev/null \
+        | ${pkgs.gawk}/bin/awk '{for (i = 1; i < NF; i++) if ($i == "src") {print $(i + 1); exit}}')
+    fi
+
+    if [ -z "$ip" ]; then
+      echo "[ERROR] could not determine the node ipv4 address" >&2
+      exit 1
+    fi
+
+    printf '%s' "$ip"
+  '';
+
+  siteEnvScript = pkgs.writeShellScript "csfx-site-env" ''
+    set -euo pipefail
+
+    ip=$(${primaryAddressScript})
+    edge_host="''${CSFX_VIP_ADDRESS:-$ip}"
+
+    cat > ${siteEnvFile} <<EOF
+    CSFX_SITE_CALLBACK_URL=http://$ip:${toString siteBuilderPort}
+    CSFX_SITE_REGISTRY=$ip:${toString siteRegistryPort}
+    CSFX_REGISTRY_MIRROR=$ip:${toString mirrorPort}
+    CSFX_SITE_EDGE_URL=http://$edge_host:${toString siteEdgePort}
+    EOF
+
+    echo "[INFO] site environment written ip=$ip edge_host=$edge_host"
+  '';
+
   commonEnv = {
     DATABASE_URL = cfg.dbUrl;
     ETCD_ENDPOINTS = cfg.etcdEndpoints;
@@ -118,10 +166,11 @@ let
     LoadCredential = "ceph.keyring:${toString cfg.ceph.keyringPath}";
   };
 
-  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { }, path ? [ ] }: {
+  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], wants ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { }, path ? [ ] }: {
     inherit description path;
     after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
     requires = [ "csfx-migrate.service" ] ++ requires;
+    inherit wants;
     wantedBy = [ "multi-user.target" ];
     unitConfig = controlPlaneOnly;
     serviceConfig = {
@@ -159,6 +208,8 @@ let
       "csfx-failover-controller:8004:Failover Controller"
       "csfx-sdn-controller:8005:SDN Controller"
       "csfx-object-storage:8006:Object Storage"
+      "csfx-site-builder:8007:Site Builder"
+      "csfx-site-registry:5060:Site Registry"
       "csfx-agent::Agent"
       "csfx-updater::Updater"
     )
@@ -337,6 +388,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    networking.firewall.allowedTCPPorts = lib.mkIf hasSiteBuilder [ siteBuilderPort siteEdgePort ];
+
     services = {
       patroni = {
         enable = true;
@@ -502,9 +555,14 @@ in
           binName = "api-gateway";
           listenAddr = "0.0.0.0";
           stateDirectory = "csfx-cp";
-          after = [ "csfx-registry.service" "csfx-setup-code.service" ];
+          after = [ "csfx-registry.service" "csfx-setup-code.service" "csfx-site-env.service" ];
           requires = [ "csfx-registry.service" "csfx-setup-code.service" ];
-          extraServiceConfig.LoadCredential = [ "setup-code:${setupCodeFile}" ];
+          wants = lib.optional hasSiteBuilder "csfx-site-env.service";
+          extraServiceConfig = {
+            LoadCredential = [ "setup-code:${setupCodeFile}" ];
+          } // lib.optionalAttrs hasSiteBuilder {
+            EnvironmentFile = [ cfg.envFile "-${siteEnvFile}" ];
+          };
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             VOLUME_MANAGER_URL = "http://localhost:8003";
@@ -513,6 +571,8 @@ in
             OBJECT_STORAGE_URL = "http://localhost:8006";
             REGISTRY_SERVICE_URL = "http://localhost:8001";
             GARAGE_INTERNAL_HOST = "127.0.0.1";
+          } // lib.optionalAttrs hasSiteBuilder {
+            SITE_BUILDER_URL = "http://localhost:${toString siteBuilderPort}";
           } // (if hasFrontend then { STATIC_DIR = "${frontendAssets}"; } else { });
         };
 
@@ -584,14 +644,7 @@ in
               (pkgs.writeShellScript "csfx-object-storage-set-public-url" ''
                 set -euo pipefail
 
-                IP=$(${pkgs.iproute2}/bin/ip -4 addr show scope global 2>/dev/null \
-                  | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}' \
-                  | head -1)
-
-                if [ -z "$IP" ]; then
-                  echo "[ERROR] could not determine a global IPv4 address"
-                  exit 1
-                fi
+                IP=$(${primaryAddressScript})
 
                 echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000" \
                   > /run/csfx-object-storage/public-url.env
@@ -600,6 +653,40 @@ in
               '')
             ];
           };
+        });
+
+        csfx-site-env = lib.mkIf hasSiteBuilder {
+          description = "CSFX site hosting environment";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "network-online.target" "csfx-cluster-env.service" ];
+          wants = [ "network-online.target" ];
+          unitConfig = controlPlaneOnly;
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            RuntimeDirectory = "csfx-site";
+            RuntimeDirectoryPreserve = "yes";
+            EnvironmentFile = "-${clusterEnvPath}";
+            ExecStart = siteEnvScript;
+          };
+        };
+
+        csfx-site-builder = lib.mkIf hasSiteBuilder (mkService {
+          description = "CSFX Site Builder";
+          bin = siteBuilderBin;
+          binName = "site-builder";
+          after = [ "csfx-site-env.service" "csfx-scheduler.service" ];
+          requires = [ "csfx-site-env.service" ];
+          path = [ pkgs.git ];
+          extraEnv = {
+            HOME = "/tmp";
+            SCHEDULER_SERVICE_URL = "http://localhost:8002";
+            SITE_BUILDER_PORT = toString siteBuilderPort;
+            SITE_EDGE_PORT = toString siteEdgePort;
+            CSFX_SITE_BUILDER_IMAGE = "ghcr.io/csfx-cloud/csfx-site-builder:${v.version}";
+            CSFX_SITE_REGISTRY_INSECURE = "1";
+          };
+          extraServiceConfig.EnvironmentFile = [ cfg.envFile siteEnvFile ];
         });
 
         csfx-updater = lib.mkIf hasUpdater {
