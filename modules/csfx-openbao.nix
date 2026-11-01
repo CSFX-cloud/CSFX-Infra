@@ -268,6 +268,7 @@ let
     ${pkgs.jq}/bin/jq 'del(.root_token)' ${initFile} > ${initFile}.next
     ${pkgs.coreutils}/bin/mv ${initFile}.next ${initFile}
     echo "[INFO] openbao bootstrap complete mount=csfx-kv role=csfx-gateway"
+    ${pkgs.systemd}/bin/systemctl try-restart csfx-api-gateway.service
   '';
 in
 {
