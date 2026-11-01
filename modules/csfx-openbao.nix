@@ -336,6 +336,8 @@ in
         csfx-openbao-init = {
           description = "CSFX OpenBao initialization and bootstrap";
           wantedBy = [ "multi-user.target" ];
+          path = [ pkgs.bash ];
+          environment.HOME = runDir;
           after = [ "csfx-openbao.service" ];
           requires = [ "csfx-openbao.service" ];
           unitConfig = {
