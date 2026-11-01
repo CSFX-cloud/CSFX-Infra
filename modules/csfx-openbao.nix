@@ -318,7 +318,7 @@ in
             PrivateTmp = true;
             ProtectSystem = "strict";
             ProtectHome = true;
-            ReadWritePaths = [ stateDir auditDir ];
+            ReadWritePaths = [ "-${stateDir}" "-${auditDir}" ];
           };
         };
 
