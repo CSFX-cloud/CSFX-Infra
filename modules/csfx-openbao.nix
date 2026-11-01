@@ -354,6 +354,7 @@ in
           wants = [ "csfx-openbao.service" ];
           serviceConfig.LoadCredential = [
             "openbao-ca:${clusterCaCert}"
+            "openbao-seal-key:${sealKeyFile}"
             "openbao-client-certificate:${clientCertFile}"
             "openbao-client-key:${clientKeyFile}"
             "openbao-role-id:${roleIdFile}"
