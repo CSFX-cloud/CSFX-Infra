@@ -47,31 +47,35 @@ garage() {
 }
 
 import_key() {
-    if garage "$GARAGE_ADMIN_URL/v2/GetKeyInfo?id=$ACCESS_KEY" >/dev/null 2>&1; then
+    if garage "$GARAGE_ADMIN_URL/v2/GetKeyInfo?id=$ACCESS_KEY" > /dev/null 2>&1; then
         return 0
     fi
     garage -X POST "$GARAGE_ADMIN_URL/v2/ImportKey" \
         -d "$(jq -n --arg id "$ACCESS_KEY" --arg secret "$SECRET_KEY" \
-            '{accessKeyId: $id, secretAccessKey: $secret, name: "csfx-site-registry"}')" >/dev/null
+            '{accessKeyId: $id, secretAccessKey: $secret, name: "csfx-site-registry"}')" > /dev/null
 }
 
 ensure_bucket() {
     local info
-    if info=$(garage "$GARAGE_ADMIN_URL/v2/GetBucketInfo?globalAlias=$BUCKET" 2>/dev/null); then
-        jq -r '.id' <<<"$info"
-        return 0
+    if info=$(garage "$GARAGE_ADMIN_URL/v2/GetBucketInfo?globalAlias=$BUCKET" 2> /dev/null); then
+        jq -er '.id' <<< "$info"
+        return
     fi
     garage -X POST "$GARAGE_ADMIN_URL/v2/CreateBucket" \
-        -d "$(jq -n --arg alias "$BUCKET" '{globalAlias: $alias}')" | jq -r '.id'
+        -d "$(jq -n --arg alias "$BUCKET" '{globalAlias: $alias}')" | jq -er '.id'
+}
+
+allow_key() {
+    garage -X POST "$GARAGE_ADMIN_URL/v2/AllowBucketKey" \
+        -d "$(jq -n --arg bucket "$1" --arg key "$ACCESS_KEY" \
+            '{bucketId: $bucket, accessKeyId: $key, permissions: {read: true, write: true, owner: true}}')" > /dev/null
 }
 
 provision_garage() {
-    import_key
     local bucket_id
-    bucket_id=$(ensure_bucket)
-    garage -X POST "$GARAGE_ADMIN_URL/v2/AllowBucketKey" \
-        -d "$(jq -n --arg bucket "$bucket_id" --arg key "$ACCESS_KEY" \
-            '{bucketId: $bucket, accessKeyId: $key, permissions: {read: true, write: true, owner: true}}')" >/dev/null
+    import_key || return 1
+    bucket_id=$(ensure_bucket) || return 1
+    allow_key "$bucket_id" || return 1
     log INFO "garage bucket ready bucket=$BUCKET"
 }
 

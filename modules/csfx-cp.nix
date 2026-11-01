@@ -109,15 +109,23 @@ let
   siteRegistryPort = 5060;
   mirrorPort = 5050;
 
+  advertiseInterface = lib.attrByPath [ "services" "csfx-agent" "advertiseInterface" ] null config;
+
   primaryAddressScript = pkgs.writeShellScript "csfx-primary-address" ''
     set -euo pipefail
 
-    ip=$(${pkgs.iproute2}/bin/ip -4 addr show scope global 2>/dev/null \
-      | ${pkgs.gnugrep}/bin/grep -oP '(?<=inet\s)\d+(\.\d+){3}' \
-      | head -1)
+    interface=${lib.escapeShellArg (toString advertiseInterface)}
+
+    if [ -n "$interface" ]; then
+      ip=$(${pkgs.iproute2}/bin/ip -4 -o addr show dev "$interface" scope global 2>/dev/null \
+        | ${pkgs.gawk}/bin/awk '{split($4, address, "/"); print address[1]; exit}')
+    else
+      ip=$(${pkgs.iproute2}/bin/ip -4 route get 1.1.1.1 2>/dev/null \
+        | ${pkgs.gawk}/bin/awk '{for (i = 1; i < NF; i++) if ($i == "src") {print $(i + 1); exit}}')
+    fi
 
     if [ -z "$ip" ]; then
-      echo "[ERROR] could not determine a global IPv4 address" >&2
+      echo "[ERROR] could not determine the node ipv4 address" >&2
       exit 1
     fi
 
