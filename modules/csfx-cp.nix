@@ -683,7 +683,7 @@ in
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             SITE_BUILDER_PORT = toString siteBuilderPort;
             SITE_EDGE_PORT = toString siteEdgePort;
-            CSFX_SITE_BUILDER_IMAGE = "ghcr.io/csfx-cloud/csfx-site-builder:${v.version}";
+            CSFX_SITE_BUILDER_IMAGE = "ghcr.io/csfx-cloud/csfx-site-builder:latest";
             CSFX_SITE_REGISTRY_INSECURE = "1";
           };
           extraServiceConfig.EnvironmentFile = [ cfg.envFile siteEnvFile ];
