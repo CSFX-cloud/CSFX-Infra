@@ -250,7 +250,8 @@ let
         wait_until 300 initialized
         exit 0
       fi
-      ${bao} operator init -recovery-shares=5 -recovery-threshold=3 -format=json > ${initFile}
+      ${bao} operator init -recovery-shares=5 -recovery-threshold=3 -format=json > ${initFile}.next
+      ${pkgs.coreutils}/bin/mv ${initFile}.next ${initFile}
       echo "[INFO] openbao initialized recovery_shares=5 recovery_threshold=3"
     fi
 
