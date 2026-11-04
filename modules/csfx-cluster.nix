@@ -235,6 +235,9 @@ let
     "csfx-failover-controller.service"
     "csfx-sdn-controller.service"
     "csfx-object-storage.service"
+    "csfx-site-env.service"
+    "csfx-site-builder.service"
+    "csfx-site-registry.service"
     "csfx-updater.service"
     "garage.service"
     "csfx-cp-ready.service"
@@ -360,7 +363,7 @@ in
           environment = lib.mkIf (cfg.vip.address != null) (vipEnvironment // {
             TLS_SANS = "localhost,127.0.0.1,${cfg.vip.address}";
           });
-          serviceConfig.EnvironmentFile = lib.mkForce [ cp.envFile "-${clusterEnvFile}" ];
+          serviceConfig.EnvironmentFile = lib.mkForce [ cp.envFile "-${clusterEnvFile}" "-/run/csfx-site/site.env" ];
           serviceConfig.LoadCredential = [
             "garage-env:/etc/csfx/garage.env"
             "patroni-superuser-password:/etc/csfx/patroni-superuser-password"
