@@ -115,14 +115,24 @@ let
     set -euo pipefail
 
     interface=${lib.escapeShellArg (toString advertiseInterface)}
+    attempts=60
 
-    if [ -n "$interface" ]; then
-      ip=$(${pkgs.iproute2}/bin/ip -4 -o addr show dev "$interface" scope global 2>/dev/null \
-        | ${pkgs.gawk}/bin/awk '{split($4, address, "/"); print address[1]; exit}')
-    else
-      ip=$(${pkgs.iproute2}/bin/ip -4 route get 1.1.1.1 2>/dev/null \
-        | ${pkgs.gawk}/bin/awk '{for (i = 1; i < NF; i++) if ($i == "src") {print $(i + 1); exit}}')
-    fi
+    lookup() {
+      if [ -n "$interface" ]; then
+        ${pkgs.iproute2}/bin/ip -4 -o addr show dev "$interface" scope global 2>/dev/null \
+          | ${pkgs.gawk}/bin/awk '{split($4, address, "/"); print address[1]; exit}' || true
+      else
+        ${pkgs.iproute2}/bin/ip -4 route get 1.1.1.1 2>/dev/null \
+          | ${pkgs.gawk}/bin/awk '{for (i = 1; i < NF; i++) if ($i == "src") {print $(i + 1); exit}}' || true
+      fi
+    }
+
+    ip=$(lookup)
+    while [ -z "$ip" ] && [ "$attempts" -gt 1 ]; do
+      attempts=$((attempts - 1))
+      sleep 1
+      ip=$(lookup)
+    done
 
     if [ -z "$ip" ]; then
       echo "[ERROR] could not determine the node ipv4 address" >&2
