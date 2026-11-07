@@ -238,7 +238,7 @@ in
       tmpfiles.rules = [
         "d /var/lib/csfx-agent 0750 csfx-agent csfx-agent -"
         "d /var/lib/csfx-updater 0750 csfx-updater csfx-updater -"
-        "f /var/lib/csfx/update_trigger 0660 csfx-agent csfx-updater -"
+        "d /var/lib/csfx/update 0770 csfx-agent csfx-updater -"
         "d /var/lib/csfx 0750 csfx-agent csfx-updater -"
       ] ++ lib.optionals (cfg.cephMonHosts != "") [
         "d /mnt/csfx-volumes 0750 csfx-agent csfx-agent -"
