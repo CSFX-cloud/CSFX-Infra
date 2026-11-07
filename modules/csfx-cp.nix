@@ -33,6 +33,7 @@ let
   siteBuilderBin = if hasSiteBuilder then mkBin "site-builder" cp."site-builder" else null;
   hasUpdater = cp ? "csfx-updater";
   updaterBin = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
+  updaterRun = import ./update-run.nix { inherit pkgs; updater = updaterBin; };
 
   setupCodeFile = "/run/csfx/setup-code";
 
@@ -362,38 +363,24 @@ in
     };
 
     updater = {
-      infraRepoMirrorUrl = lib.mkOption {
+      releaseBaseUrl = lib.mkOption {
         type = lib.types.str;
-        description = "Git remote URL to mirror CSFX-Infra from";
-      };
-
-      infraRepoGithub = lib.mkOption {
-        type = lib.types.str;
-        default = "CSFX-cloud/CSFX-Infra";
-        description = "GitHub repo slug for tag resolution (owner/repo)";
-      };
-
-      infraRepoBranch = lib.mkOption {
-        type = lib.types.str;
-        default = "main";
-      };
-
-      nixosConfig = lib.mkOption {
-        type = lib.types.str;
-        default = "csfx-node";
-        description = "nixosConfigurations attribute name in the flake to build and switch to";
+        default = "https://github.com/CSFX-cloud/CSFX-Infra/releases";
+        description = "Release channel base URL serving manifests and bundles";
       };
 
       pollIntervalSecs = lib.mkOption {
         type = lib.types.int;
         default = 120;
       };
+    };
 
-      mirrorDir = lib.mkOption {
-        type = lib.types.str;
-        default = "/var/lib/csfx-updater/infra.git";
-      };
-
+    updaterPackage = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      default = updaterBin;
+      readOnly = true;
+      internal = true;
+      description = "csfx-updater package, shared with the worker update units";
     };
   };
 
@@ -706,21 +693,17 @@ in
           wants = [ "network-online.target" ];
           requires = [ "etcd.service" ];
           unitConfig = controlPlaneOnly;
-          path = [ pkgs.git pkgs.nixos-rebuild pkgs.nix ];
+          path = [ config.nix.package pkgs.systemd pkgs.gnutar pkgs.zstd pkgs.coreutils ];
           serviceConfig = {
-            ExecStart = "${updaterBin}/bin/csfx-updater";
+            ExecStart = "${updaterRun}";
             Restart = "on-failure";
             RestartSec = "10s";
             User = "root";
           };
           environment = {
             ETCD_ENDPOINTS = cfg.etcdEndpoints;
-            INFRA_REPO_MIRROR_URL = cfg.updater.infraRepoMirrorUrl;
-            INFRA_REPO_GITHUB = cfg.updater.infraRepoGithub;
-            INFRA_REPO_BRANCH = cfg.updater.infraRepoBranch;
-            INFRA_REPO_MIRROR_DIR = cfg.updater.mirrorDir;
+            RELEASE_BASE_URL = cfg.updater.releaseBaseUrl;
             POLL_INTERVAL_SECS = toString cfg.updater.pollIntervalSecs;
-            NIXOS_CONFIG = cfg.updater.nixosConfig;
             GATEWAY_URL = "https://localhost:8000";
             HEALTH_CHECK_TIMEOUT_SECS = "120";
             HEALTH_CHECK_RETRY_INTERVAL_SECS = "5";
