@@ -34,7 +34,7 @@
         self.nixosModules.update-units
       ];
 
-      nodeConfig = nixosConfig: _: {
+      nodeConfig = _: {
         system.stateVersion = "25.05";
 
         console.keyMap = "de";
@@ -84,11 +84,6 @@
             enable = true;
             dbUrl = "";
             etcdEndpoints = "http://localhost:2379";
-            updater = {
-              infraRepoMirrorUrl = "https://github.com/CSFX-cloud/CSFX-Infra.git";
-              infraRepoGithub = "CSFX-cloud/CSFX-Infra";
-              infraRepoBranch = "main";
-            };
           };
           csfx-setup = {
             enable = true;
@@ -103,9 +98,7 @@
           csfx-site-registry.enable = true;
           csfx-update-units = {
             enable = true;
-            nixCacheUrl = "http://localhost:5000";
-            nixCachePublicKey = "";
-            inherit nixosConfig;
+            releasePublicKeys = [ "csfx-release-1:SFHA8h6f60v46q2OBnle4lkyOoMc/SEF+Y/0hhs28zE=" ];
           };
         };
       };
@@ -155,12 +148,12 @@
       nixosConfigurations = {
         csfx-node = mkSystem {
           system = "x86_64-linux";
-          modules = nodeModules ++ [ (nodeConfig "csfx-node") ];
+          modules = nodeModules ++ [ nodeConfig ];
         };
 
         csfx-node-arm64 = mkSystem {
           system = "aarch64-linux";
-          modules = nodeModules ++ [ (nodeConfig "csfx-node-arm64") ];
+          modules = nodeModules ++ [ nodeConfig ];
         };
 
         csfx-node-iso = mkSystem {

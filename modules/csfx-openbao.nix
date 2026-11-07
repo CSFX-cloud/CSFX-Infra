@@ -3,6 +3,7 @@
 let
   cfg = config.services.csfx-openbao;
   cp = config.services.csfx-cp;
+  nodeName = import ./node-name.nix pkgs;
 
   user = "csfx-openbao";
   runDir = "/run/csfx-openbao";
@@ -61,6 +62,7 @@ let
     set -euo pipefail
 
     umask 077
+    node_name=$(${nodeName})
     mesh_ip=$(${meshAddressScript})
     vip=""
     if [ -f ${clusterEnvFile} ]; then
@@ -75,7 +77,7 @@ let
       advertise="127.0.0.1"
     fi
 
-    sans="IP:127.0.0.1,DNS:localhost,DNS:${config.networking.hostName}"
+    sans="IP:127.0.0.1,DNS:localhost,DNS:$node_name"
     if [ -n "$mesh_ip" ]; then
       sans="$sans,IP:$mesh_ip"
     fi
@@ -123,7 +125,7 @@ let
     ${pkgs.coreutils}/bin/install -d -m 0700 -o ${user} -g ${user} ${auditDir}
 
     ${pkgs.coreutils}/bin/install -m 0644 ${clusterCaCert} ${tlsDir}/ca.crt
-    issue server "${config.networking.hostName}" "$sans" ${tlsDir}/server.crt ${tlsDir}/server.key
+    issue server "$node_name" "$sans" ${tlsDir}/server.crt ${tlsDir}/server.key
     issue gateway csfx-gateway "DNS:csfx-gateway" ${clientCertFile} ${clientKeyFile}
     ${pkgs.coreutils}/bin/chown ${user}:${user} ${tlsDir}/server.crt ${tlsDir}/server.key ${tlsDir}/ca.crt
 
@@ -147,7 +149,7 @@ let
 
     storage "raft" {
       path = "${stateDir}"
-      node_id = "${config.networking.hostName}"
+      node_id = "$node_name"
     }
 
     listener "tcp" {
@@ -216,6 +218,7 @@ let
     export BAO_CLIENT_CERT="${tlsDir}/server.crt"
     export BAO_CLIENT_KEY="${tlsDir}/server.key"
     umask 077
+    node_name=$(${nodeName})
 
     status() {
       ${bao} status -format=json 2>/dev/null || true
@@ -242,10 +245,10 @@ let
     wait_until 60 reachable
 
     if ! initialized; then
-      outcome=$(printf 'create("${initLockKey}") = "0"\n\nput ${initLockKey} "${config.networking.hostName}"\n\n\n' \
+      outcome=$(printf 'create("${initLockKey}") = "0"\n\nput ${initLockKey} "'"$node_name"'"\n\n\n' \
         | ${pkgs.etcd}/bin/etcdctl --endpoints=${etcdEndpoint} txn | ${pkgs.coreutils}/bin/head -n 1)
       holder=$(${pkgs.etcd}/bin/etcdctl --endpoints=${etcdEndpoint} get ${initLockKey} --print-value-only)
-      if [ "$outcome" != "SUCCESS" ] && [ "$holder" != "${config.networking.hostName}" ]; then
+      if [ "$outcome" != "SUCCESS" ] && [ "$holder" != "$node_name" ]; then
         echo "[INFO] openbao initialized by another master action=join holder=$holder"
         wait_until 300 initialized
         exit 0

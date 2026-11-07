@@ -2,128 +2,65 @@
 
 let
   cfg = config.services.csfx-update-units;
+  cp = config.services.csfx-cp;
+  updaterRun = import ./update-run.nix { inherit pkgs; updater = cp.updaterPackage; };
+  manifestFile = "/var/lib/csfx/update/manifest.json";
 in
 {
   options.services.csfx-update-units = {
-    enable = lib.mkEnableOption "CSFX update path units and watchdog";
+    enable = lib.mkEnableOption "CSFX worker update path unit applying signed release closures";
 
-    nixCacheUrl = lib.mkOption {
+    releasePublicKeys = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      description = "Nix style public keys (name:base64) trusted to sign releases, manifests and closures; list old and new key during a rotation";
+    };
+
+    releaseBaseUrl = lib.mkOption {
       type = lib.types.str;
-      description = "URL of the CP Harmonia binary cache";
-    };
-
-    nixCachePublicKey = lib.mkOption {
-      type = lib.types.str;
-      description = "Public key of the CP Harmonia binary cache";
-    };
-
-    infraRepoMirrorDir = lib.mkOption {
-      type = lib.types.str;
-      default = "/var/lib/csfx-updater/infra.git";
-      description = "Path to the local git mirror of CSFX-Infra used by csfx-updater";
-    };
-
-    nixosConfig = lib.mkOption {
-      type = lib.types.str;
-      description = "Name of the nixosConfiguration to activate (e.g. csfx-worker or csfx-control-plane)";
-    };
-
-    watchdogHeartbeats = lib.mkOption {
-      type = lib.types.int;
-      default = 3;
-      description = "Number of successful heartbeats required before watchdog clears";
-    };
-
-    watchdogTimeoutSecs = lib.mkOption {
-      type = lib.types.int;
-      default = 300;
-      description = "Seconds before watchdog triggers rollback";
+      default = "https://github.com/CSFX-cloud/CSFX-Infra/releases";
+      description = "Release channel base URL serving bundles when no cluster peer has the closure";
     };
   };
 
   config = lib.mkIf cfg.enable {
-    nix.settings = lib.mkMerge [
-      (lib.mkIf (cfg.nixCacheUrl != "") {
-        substituters = [ cfg.nixCacheUrl ];
-      })
-      (lib.mkIf (cfg.nixCachePublicKey != "") {
-        trusted-public-keys = [ cfg.nixCachePublicKey ];
-      })
-    ];
+    nix.settings.trusted-public-keys = cfg.releasePublicKeys;
+
+    environment.etc."csfx/release-public-key".text = lib.concatStringsSep "\n" cfg.releasePublicKeys;
 
     systemd = {
-      services = {
-        csfx-node-updater = {
-          description = "CSFX Node Updater — nixos-rebuild switch on new flake rev";
-          after = [ "network-online.target" ];
-          wants = [ "network-online.target" ];
-          onSuccess = [ "csfx-watchdog.timer" ];
-          serviceConfig = {
-            Type = "oneshot";
-            User = "root";
-            ExecStart = pkgs.writeShellScript "csfx-node-updater" ''
-              set -euo pipefail
-
-              TRIGGER_FILE="/var/lib/csfx/update_trigger"
-              MIRROR_DIR="${cfg.infraRepoMirrorDir}"
-              CONFIG="${cfg.nixosConfig}"
-
-              REV=$(cat "$TRIGGER_FILE" | tr -d '[:space:]')
-
-              if ! echo "$REV" | grep -qE '^[0-9a-f]{40}$'; then
-                echo "invalid rev: $REV" >&2
-                exit 1
-              fi
-
-              FLAKE_URL="git+file://${"\${MIRROR_DIR}"}?rev=${"\${REV}"}"
-
-              nixos-rebuild switch --flake "$FLAKE_URL#$CONFIG"
-            '';
-          };
+      services.csfx-apply-update = {
+        description = "CSFX apply signed release closure on worker";
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
+        unitConfig.ConditionPathExists = [ cp.workerMarker manifestFile ];
+        path = [ config.nix.package pkgs.systemd pkgs.gnutar pkgs.zstd pkgs.coreutils ];
+        environment = {
+          RELEASE_BASE_URL = cfg.releaseBaseUrl;
+          STATE_DIR = "/var/lib/csfx-node-updater";
         };
-
-        csfx-watchdog = {
-          description = "CSFX update watchdog — rollback if heartbeats missing";
-          serviceConfig = {
-            Type = "oneshot";
-            User = "root";
-            ExecStart = pkgs.writeShellScript "csfx-watchdog" ''
-              set -euo pipefail
-
-              COUNTER_FILE="/var/lib/csfx/post_update_heartbeats"
-              REQUIRED=${toString cfg.watchdogHeartbeats}
-
-              if [ ! -f "$COUNTER_FILE" ]; then
-                echo "no heartbeat counter found, triggering rollback" >&2
-                nixos-rebuild switch --rollback
-                exit 0
-              fi
-
-              COUNT=$(cat "$COUNTER_FILE" | tr -d '[:space:]')
-
-              if [ "$COUNT" -lt "$REQUIRED" ] 2>/dev/null; then
-                echo "only $COUNT/$REQUIRED heartbeats received, triggering rollback" >&2
-                nixos-rebuild switch --rollback
-              fi
-            '';
-          };
+        serviceConfig = {
+          Type = "oneshot";
+          User = "root";
+          ExecStart = "${updaterRun} apply ${manifestFile}";
         };
       };
 
       paths.csfx-update-trigger = {
-        description = "Watch for CSFX update trigger file";
+        description = "Watch for staged CSFX release manifest";
         wantedBy = [ "multi-user.target" ];
         pathConfig = {
-          PathModified = "/var/lib/csfx/update_trigger";
-          Unit = "csfx-node-updater.service";
+          PathChanged = manifestFile;
+          Unit = "csfx-apply-update.service";
         };
       };
 
-      timers.csfx-watchdog = {
-        description = "CSFX update watchdog timer";
-        timerConfig = {
-          OnActiveSec = "${toString cfg.watchdogTimeoutSecs}s";
-          RemainAfterElapse = false;
+      services.csfx-apply-update-resume = {
+        description = "CSFX finish interrupted worker update after boot";
+        wantedBy = [ "multi-user.target" ];
+        unitConfig.ConditionPathExists = [ cp.workerMarker manifestFile "/var/lib/csfx-node-updater/pending.json" ];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${config.systemd.package}/bin/systemctl start csfx-apply-update.service";
         };
       };
     };
