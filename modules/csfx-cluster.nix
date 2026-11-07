@@ -121,6 +121,7 @@ let
     trap '${pkgs.coreutils}/bin/rm -rf "$staging"' EXIT
 
     cat > "$staging/etcd.env" <<EOF
+    ETCD_NAME=$member_name
     ETCD_LISTEN_CLIENT_URLS=$client_urls
     ETCD_ADVERTISE_CLIENT_URLS=http://$advertise:${toString etcdPort}
     ETCD_LISTEN_PEER_URLS=http://$advertise:${toString etcdPeerPort}
