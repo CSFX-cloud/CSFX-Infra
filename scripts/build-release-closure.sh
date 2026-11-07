@@ -19,15 +19,21 @@ trap 'rm -rf "$work"' EXIT
 
 toplevel=$(nix build --no-link --print-out-paths ".#nixosConfigurations.${config}.config.system.build.toplevel")
 
-nix path-info -r "$toplevel" \
-  | xargs -P 16 -I{} sh -c 'curl -fsI -o /dev/null "'"$cache_url"'/$(basename "{}" | cut -c1-32).narinfo" || echo "{}"' \
-  > "$work/missing"
+nix path-info -r "$toplevel" > "$work/all"
+xargs -P 16 -I{} sh -c 'curl -fsI -o /dev/null "'"$cache_url"'/$(basename "{}" | cut -c1-32).narinfo" || echo "{}"' \
+  < "$work/all" > "$work/missing"
 
 for extra_key in "${key_files[@]:1}"; do
   nix store sign --key-file "$extra_key" --recursive "$toplevel"
 done
 
-xargs nix copy --no-recursive --to "file://${work}/cache?compression=none&secret-key=${key_file}" < "$work/missing"
+xargs nix copy --to "file://${work}/cache?compression=none&secret-key=${key_file}" < "$work/missing"
+
+grep -vxFf "$work/missing" "$work/all" | while read -r path; do
+  narinfo="${work}/cache/$(basename "$path" | cut -c1-32).narinfo"
+  [ -f "$narinfo" ] || continue
+  rm -f "${work}/cache/$(sed -n 's/^URL: //p' "$narinfo")" "$narinfo"
+done
 tar -C "$work/cache" -cf - . | zstd -19 -T0 -o "${out}/${bundle}"
 
 jq -n --arg version "$version" --arg arch "$arch" --arg toplevel "$toplevel" --arg bundle "$bundle" \
