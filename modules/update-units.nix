@@ -10,9 +10,9 @@ in
   options.services.csfx-update-units = {
     enable = lib.mkEnableOption "CSFX worker update path unit applying signed release closures";
 
-    releasePublicKey = lib.mkOption {
-      type = lib.types.str;
-      description = "Nix style public key (name:base64) that signs releases, manifests and closures";
+    releasePublicKeys = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      description = "Nix style public keys (name:base64) trusted to sign releases, manifests and closures; list old and new key during a rotation";
     };
 
     releaseBaseUrl = lib.mkOption {
@@ -23,9 +23,9 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    nix.settings.trusted-public-keys = lib.mkIf (cfg.releasePublicKey != "") [ cfg.releasePublicKey ];
+    nix.settings.trusted-public-keys = cfg.releasePublicKeys;
 
-    environment.etc."csfx/release-public-key".text = cfg.releasePublicKey;
+    environment.etc."csfx/release-public-key".text = lib.concatStringsSep "\n" cfg.releasePublicKeys;
 
     systemd = {
       services.csfx-apply-update = {

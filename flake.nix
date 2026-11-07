@@ -98,7 +98,7 @@
           csfx-site-registry.enable = true;
           csfx-update-units = {
             enable = true;
-            releasePublicKey = "";
+            releasePublicKeys = [ ];
           };
         };
       };

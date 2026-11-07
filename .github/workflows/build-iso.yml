@@ -140,13 +140,20 @@ jobs:
       - name: Build, sign and bundle closure
         env:
           RELEASE_KEY: ${{ secrets.CSFX_RELEASE_KEY }}
+          RELEASE_KEY_NEXT: ${{ secrets.CSFX_RELEASE_KEY_NEXT }}
         run: |
           VERSION=$(grep -m1 'version' versions.nix | sed 's/[^"]*"\([^"]*\)".*/\1/')
           KEY_FILE="$RUNNER_TEMP/release.key"
           umask 077
+          NEXT_KEY_FILE="$RUNNER_TEMP/release-next.key"
           printf '%s' "$RELEASE_KEY" > "$KEY_FILE"
-          scripts/build-release-closure.sh "${{ matrix.config }}" "${{ matrix.system }}" "$VERSION" "$KEY_FILE" closure-out
-          rm -f "$KEY_FILE"
+          KEY_ARGS=("$KEY_FILE")
+          if [ -n "$RELEASE_KEY_NEXT" ]; then
+            printf '%s' "$RELEASE_KEY_NEXT" > "$NEXT_KEY_FILE"
+            KEY_ARGS+=("$NEXT_KEY_FILE")
+          fi
+          scripts/build-release-closure.sh "${{ matrix.config }}" "${{ matrix.system }}" "$VERSION" closure-out "${KEY_ARGS[@]}"
+          rm -f "$KEY_FILE" "$NEXT_KEY_FILE"
 
       - uses: actions/upload-artifact@v7
         with:
