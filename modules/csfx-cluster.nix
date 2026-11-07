@@ -3,6 +3,7 @@
 let
   cfg = config.services.csfx-cluster;
   cp = config.services.csfx-cp;
+  nodeName = import ./node-name.nix pkgs;
 
   runDir = "/run/csfx-cluster";
   haproxyDir = "/run/csfx-haproxy";
@@ -108,7 +109,7 @@ let
       client_urls="http://127.0.0.1:${toString etcdPort}"
     fi
 
-    member_name="${config.networking.hostName}"
+    member_name=$(${nodeName})
     if [ -f ${joinEnvFile} ]; then
       joined_name=$(${pkgs.gnused}/bin/sed -n 's/^ETCD_NAME=//p' ${joinEnvFile})
       if [ -n "$joined_name" ]; then
