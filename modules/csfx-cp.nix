@@ -568,6 +568,7 @@ in
             OBJECT_STORAGE_URL = "http://localhost:8006";
             REGISTRY_SERVICE_URL = "http://localhost:8001";
             GARAGE_INTERNAL_HOST = "127.0.0.1";
+            RELEASE_BASE_URL = cfg.updater.releaseBaseUrl;
           } // lib.optionalAttrs hasSiteBuilder {
             SITE_BUILDER_URL = "http://localhost:${toString siteBuilderPort}";
           } // (if hasFrontend then { STATIC_DIR = "${frontendAssets}"; } else { });

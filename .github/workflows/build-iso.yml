@@ -199,32 +199,29 @@ jobs:
         id: ver
         run: |
           VERSION=$(grep -m1 'version' versions.nix | sed 's/[^"]*"\([^"]*\)".*/\1/')
-          BRANCH="${{ github.ref_name }}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
 
       - name: Create versioned pre-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
-          BRANCH="${{ steps.ver.outputs.branch }}"
           TAG="v${VERSION}"
           REPO="${{ github.repository }}"
           BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
           if gh release view "${TAG}" --repo "$REPO" > /dev/null 2>&1; then
             for attempt in 1 2 3 4 5; do
-              gh release upload "${TAG}" --repo "$REPO" *.iso *.sha256 *.tar.zst manifest-*.json manifest-*.json.sig --clobber && break
+              gh release upload "${TAG}" --repo "$REPO" *.iso *.sha256 *.tar.zst manifest-*.json manifest-*.json.sig release-notes/* --clobber && break
               [ "$attempt" -eq 5 ] && exit 1
               sleep $((attempt * 15))
             done
           else
             gh release create "${TAG}" \
               --title "v${VERSION}" \
-              --notes "branch: ${BRANCH}" \
+              --notes-file release-notes/release-notes.md \
               --prerelease \
-              *.iso *.sha256 *.tar.zst manifest-*.json manifest-*.json.sig
+              *.iso *.sha256 *.tar.zst manifest-*.json manifest-*.json.sig release-notes/*
           fi
 
           echo "## ISO Download URLs" >> $GITHUB_STEP_SUMMARY
@@ -264,15 +261,15 @@ jobs:
 
           if gh release view "${TAG}" > /dev/null 2>&1; then
             for attempt in 1 2 3 4 5; do
-              gh release upload "${TAG}" *.iso *.sha256 *.tar.zst manifest-*.json manifest-*.json.sig --clobber && break
+              gh release upload "${TAG}" *.iso *.sha256 *.tar.zst manifest-*.json manifest-*.json.sig release-notes/* --clobber && break
               [ "$attempt" -eq 5 ] && exit 1
               sleep $((attempt * 15))
             done
           else
             gh release create "${TAG}" \
               --title "v${VERSION}" \
-              --generate-notes \
-              *.iso *.sha256 *.tar.zst manifest-*.json manifest-*.json.sig
+              --notes-file release-notes/release-notes.md \
+              *.iso *.sha256 *.tar.zst manifest-*.json manifest-*.json.sig release-notes/*
           fi
 
           echo "## ISO Download URLs" >> $GITHUB_STEP_SUMMARY
