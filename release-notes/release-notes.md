@@ -1,0 +1,22 @@
+**Pre-release** - 2026-11-08
+
+## New
+
+- add info badge variant and use it for security notes
+- open release notes drawer from the sidebar update hint
+- add release notes crate and gateway notes endpoint
+- add release notes drawer with design system story
+- show pre-release updates on pre-release channel and poll every 30 minutes
+
+## Improved
+
+- apply cargo fmt and clippy fixes
+- drop entry counters from the release notes drawer
+- render breaking changes as a plain category with an accent line
+
+## Fixed
+
+- pin drawer header and footer, widen it and add list bullets
+- load design system styles and tokens in storybook
+- render the release notes drawer stories on the full canvas
+- drop removed infraRepoMirrorUrl option from the lima dev config
