@@ -1,5 +1,5 @@
 {
-  "version": "0.2.2-alpha.1040",
+  "version": "0.2.2-alpha.1041",
   "channel": "pre",
   "date": "2026-11-08",
   "breaking": [],
@@ -8,21 +8,8 @@
       {
         "type": "list",
         "items": [
-          "add info badge variant and use it for security notes",
-          "open release notes drawer from the sidebar update hint",
-          "add release notes crate and gateway notes endpoint",
-          "add release notes drawer with design system story",
-          "show pre-release updates on pre-release channel and poll every 30 minutes"
-        ]
-      }
-    ],
-    "improved": [
-      {
-        "type": "list",
-        "items": [
-          "apply cargo fmt and clippy fixes",
-          "drop entry counters from the release notes drawer",
-          "render breaking changes as a plain category with an accent line"
+          "restyle update page with status hero and patch notes link",
+          "add patch notes page to settings"
         ]
       }
     ],
@@ -30,10 +17,11 @@
       {
         "type": "list",
         "items": [
-          "pin drawer header and footer, widen it and add list bullets",
-          "load design system styles and tokens in storybook",
-          "render the release notes drawer stories on the full canvas",
-          "drop removed infraRepoMirrorUrl option from the lima dev config"
+          "link sidebar update hint to the update settings page",
+          "stop sidebar update hint from overflowing horizontally",
+          "move update hint above account and open notes drawer from patch notes page",
+          "open notes drawer from update page and restyle sidebar update hint",
+          "restore update page header and link patch notes from each release"
         ]
       }
     ]
