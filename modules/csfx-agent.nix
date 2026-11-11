@@ -53,7 +53,7 @@ in
     registrationToken = lib.mkOption {
       type = lib.types.str;
       default = "";
-      description = "Pre-registration token (leave empty to use bootstrap token)";
+      description = "Registration token (required unless CSFX_JOIN is provided)";
     };
 
     wgEndpoint = lib.mkOption {
