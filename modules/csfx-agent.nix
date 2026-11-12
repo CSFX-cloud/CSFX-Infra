@@ -13,6 +13,16 @@ let
     chmod +x $out/bin/csfx-agent
   '';
 
+  firecrackerRelease = let
+    cpu = if pkgs.stdenv.isAarch64 then "aarch64" else "x86_64";
+    release = "release-v1.13.2-${cpu}";
+  in pkgs.runCommand "firecracker-release" { } ''
+    mkdir -p $out/bin
+    tar -xzf ${pkgs.fetchurl versions.firecracker.${arch}} -C $TMPDIR
+    install -m755 $TMPDIR/${release}/firecracker-v1.13.2-${cpu} $out/bin/firecracker
+    install -m755 $TMPDIR/${release}/jailer-v1.13.2-${cpu} $out/bin/jailer
+  '';
+
   guestInitSrc = pkgs.fetchurl {
     inherit (versions.csfx.guestInit.${arch}) url sha256;
   };
@@ -251,7 +261,7 @@ in
           wants = [ "network-online.target" "csfx-cp-ready.service" ];
 
           path = [ pkgs.nftables pkgs.wireguard-tools pkgs.iproute2 pkgs.util-linux pkgs.coredns ]
-            ++ lib.optionals cfg.enableFirecracker [ pkgs.pkgsStatic.firecracker pkgs.e2fsprogs ]
+            ++ lib.optionals cfg.enableFirecracker [ firecrackerRelease pkgs.e2fsprogs ]
             ++ lib.optionals cfg.enableQemu [ pkgs.qemu_kvm pkgs.dnsmasq ]
             ++ lib.optionals (cfg.cephMonHosts != "") [ pkgs.ceph-client ];
 
@@ -289,7 +299,7 @@ in
           } // lib.optionalAttrs (cfg.cephKeyringPath != null) {
             CEPH_KEYRING = toString cfg.cephKeyringPath;
           } // lib.optionalAttrs cfg.enableFirecracker {
-            CSFX_FIRECRACKER_BIN_PATH = "${pkgs.pkgsStatic.firecracker}/bin/firecracker";
+            CSFX_FIRECRACKER_BIN_PATH = "${firecrackerRelease}/bin/firecracker";
           } // lib.optionalAttrs cfg.enableQemu {
             CSFX_QEMU_BIN_PATH = "${pkgs.qemu_kvm}/bin/qemu-system-x86_64";
           } // lib.optionalAttrs (cfg.registryMirror != null) {
