@@ -67,6 +67,6 @@ in
       };
     };
 
-    networking.firewall.allowedTCPPorts = [ cfg.port ];
+    networking.firewall.interfaces.wgmgmt0.allowedTCPPorts = [ cfg.port ];
   };
 }
