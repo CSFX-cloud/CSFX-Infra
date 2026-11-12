@@ -13,15 +13,17 @@ let
     chmod +x $out/bin/csfx-agent
   '';
 
-  firecrackerRelease = let
-    cpu = if pkgs.stdenv.isAarch64 then "aarch64" else "x86_64";
-    release = "release-v1.13.2-${cpu}";
-  in pkgs.runCommand "firecracker-release" { } ''
-    mkdir -p $out/bin
-    tar -xzf ${pkgs.fetchurl versions.firecracker.${arch}} -C $TMPDIR
-    install -m755 $TMPDIR/${release}/firecracker-v1.13.2-${cpu} $out/bin/firecracker
-    install -m755 $TMPDIR/${release}/jailer-v1.13.2-${cpu} $out/bin/jailer
-  '';
+  firecrackerRelease =
+    let
+      cpu = if pkgs.stdenv.isAarch64 then "aarch64" else "x86_64";
+      release = "release-v1.13.2-${cpu}";
+    in
+    pkgs.runCommand "firecracker-release" { } ''
+      mkdir -p $out/bin
+      tar -xzf ${pkgs.fetchurl versions.firecracker.${arch}} -C $TMPDIR
+      install -m755 $TMPDIR/${release}/firecracker-v1.13.2-${cpu} $out/bin/firecracker
+      install -m755 $TMPDIR/${release}/jailer-v1.13.2-${cpu} $out/bin/jailer
+    '';
 
   guestInitSrc = pkgs.fetchurl {
     inherit (versions.csfx.guestInit.${arch}) url sha256;
