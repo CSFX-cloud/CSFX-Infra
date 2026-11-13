@@ -14,6 +14,9 @@ let
   etcdPort = 2379;
   etcdPeerPort = 2380;
   postgresPort = 5433;
+  pgbouncerDir = "/run/csfx-pgbouncer";
+  pgbouncerPort = 6432;
+  pgbouncerUser = "csfx-pgbouncer";
   patroniApiPort = 8008;
   meshCidr = "10.100.0.0/16";
   clusterEnvFile = "/etc/csfx/cluster.env";
@@ -170,6 +173,38 @@ let
     ${pkgs.systemd}/bin/systemctl restart patroni.service
   '';
 
+  pgbouncerConfigScript = pkgs.writeShellScript "csfx-pgbouncer-config" ''
+    set -euo pipefail
+
+    url=$(${pkgs.gnugrep}/bin/grep '^DATABASE_URL=' ${cp.envFile} | ${pkgs.coreutils}/bin/cut -d= -f2-)
+    db_user=$(echo "$url" | ${pkgs.gnused}/bin/sed 's|.*://\([^:]*\):.*|\1|')
+    db_pass=$(echo "$url" | ${pkgs.gnused}/bin/sed 's|.*://[^:]*:\([^@]*\)@.*|\1|')
+
+    printf '"%s" "%s"\n' "$db_user" "$db_pass" > "${pgbouncerDir}/userlist.txt"
+
+    cat > "${pgbouncerDir}/pgbouncer.ini" <<INI
+    [databases]
+    * = host=127.0.0.1 port=5432
+
+    [pgbouncer]
+    listen_addr = 127.0.0.1
+    listen_port = ${toString pgbouncerPort}
+    unix_socket_dir =
+    auth_type = scram-sha-256
+    auth_file = ${pgbouncerDir}/userlist.txt
+    pool_mode = transaction
+    ignore_startup_parameters = extra_float_digits
+    max_prepared_statements = 200
+    default_pool_size = 40
+    max_client_conn = 2000
+    query_wait_timeout = 5
+    server_idle_timeout = 300
+    INI
+
+    ${pkgs.coreutils}/bin/chown ${pgbouncerUser}: "${pgbouncerDir}/userlist.txt" "${pgbouncerDir}/pgbouncer.ini"
+    ${pkgs.coreutils}/bin/chmod 0600 "${pgbouncerDir}/userlist.txt" "${pgbouncerDir}/pgbouncer.ini"
+  '';
+
   haproxyConfigScript = pkgs.writeShellScript "csfx-haproxy-config" ''
     set -euo pipefail
 
@@ -278,6 +313,14 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    users = {
+      users.${pgbouncerUser} = {
+        isSystemUser = true;
+        group = pgbouncerUser;
+      };
+      groups.${pgbouncerUser} = { };
+    };
+
     networking.firewall = {
       interfaces.wgmgmt0.allowedTCPPorts = [ etcdPort etcdPeerPort postgresPort patroniApiPort ];
       extraCommands = ''
@@ -407,6 +450,25 @@ in
               "${pkgs.haproxy}/sbin/haproxy -c -f ${haproxyDir}/haproxy.cfg"
               "${pkgs.coreutils}/bin/kill -USR2 $MAINPID"
             ];
+            Restart = "on-failure";
+            RestartSec = "2s";
+          };
+        };
+
+        csfx-pgbouncer = clusterUnit // {
+          description = "CSFX postgres connection pooler";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "network.target" "csfx-haproxy.service" ];
+          before = [ "csfx-api-gateway.service" ];
+          serviceConfig = {
+            User = pgbouncerUser;
+            RuntimeDirectory = "csfx-pgbouncer";
+            RuntimeDirectoryMode = "0750";
+            ExecStartPre = "+${pgbouncerConfigScript}";
+            ExecStart = "${pkgs.pgbouncer}/bin/pgbouncer ${pgbouncerDir}/pgbouncer.ini";
+            ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
+            KillSignal = "SIGINT";
+            TimeoutStopSec = "10s";
             Restart = "on-failure";
             RestartSec = "2s";
           };

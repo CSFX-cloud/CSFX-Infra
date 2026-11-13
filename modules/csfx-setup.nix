@@ -68,7 +68,8 @@ let
         SITE_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
 
         cat > "$ENV_FILE" <<EOF
-    DATABASE_URL=postgres://csfx:$DB_PASSWORD@localhost:5432/csfx
+    DATABASE_URL=postgres://csfx:$DB_PASSWORD@127.0.0.1:6432/csfx
+    DATABASE_DIRECT_URL=postgres://csfx:$DB_PASSWORD@127.0.0.1:5432/csfx
     JWT_SECRET=$JWT_SECRET
     ETCD_ENDPOINTS=http://localhost:2379
     GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN_TOKEN
