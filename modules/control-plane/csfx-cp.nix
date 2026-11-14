@@ -33,7 +33,7 @@ let
   siteBuilderBin = if hasSiteBuilder then mkBin "site-builder" cp."site-builder" else null;
   hasUpdater = cp ? "csfx-updater";
   updaterBin = if hasUpdater then mkBin "csfx-updater" cp."csfx-updater" else null;
-  updaterRun = import ./update-run.nix { inherit pkgs; updater = updaterBin; };
+  updaterRun = import ../update/update-run.nix { inherit pkgs; updater = updaterBin; };
 
   setupCodeFile = "/run/csfx/setup-code";
 

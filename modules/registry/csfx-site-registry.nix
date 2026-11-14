@@ -4,8 +4,8 @@ let
   cfg = config.services.csfx-site-registry;
   cp = config.services.csfx-cp;
   garage = config.services.csfx-garage;
-  zot = pkgs.callPackage ../pkgs/zot.nix { };
-  prepareScript = pkgs.writeShellScript "csfx-site-registry-prepare" (builtins.readFile ../scripts/site-registry-prepare.sh);
+  zot = pkgs.callPackage ../../pkgs/zot.nix { };
+  prepareScript = pkgs.writeShellScript "csfx-site-registry-prepare" (builtins.readFile ../../scripts/site-registry-prepare.sh);
   useGarage = cfg.storage == "garage";
   runtimeDir = "/run/csfx-site-registry";
   stateDir = "/var/lib/private/csfx-site-registry";
