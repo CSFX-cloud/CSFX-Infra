@@ -2,7 +2,7 @@
 
 let
   cfg = config.services.csfx-registry-mirror;
-  zot = pkgs.callPackage ../pkgs/zot.nix { };
+  zot = pkgs.callPackage ../../pkgs/zot.nix { };
 
   zotConfig = {
     distSpecVersion = "1.1.0";

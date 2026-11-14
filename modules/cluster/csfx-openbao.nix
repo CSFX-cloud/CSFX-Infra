@@ -3,7 +3,7 @@
 let
   cfg = config.services.csfx-openbao;
   cp = config.services.csfx-cp;
-  nodeName = import ./node-name.nix pkgs;
+  nodeName = import ../node/node-name.nix pkgs;
 
   user = "csfx-openbao";
   runDir = "/run/csfx-openbao";

@@ -130,19 +130,19 @@
       };
 
       nixosModules = {
-        csfx-agent = import ./modules/csfx-agent.nix;
-        csfx-cp = import ./modules/csfx-cp.nix;
-        csfx-garage = import ./modules/csfx-garage.nix;
-        csfx-binary-cache = import ./modules/csfx-binary-cache.nix;
-        csfx-registry-mirror = import ./modules/csfx-registry-mirror.nix;
-        csfx-site-registry = import ./modules/csfx-site-registry.nix;
-        csfx-setup = import ./modules/csfx-setup.nix;
-        csfx-cluster = import ./modules/csfx-cluster.nix;
-        csfx-openbao = import ./modules/csfx-openbao.nix;
-        csfx-ingress = import ./modules/csfx-ingress.nix;
-        csfx-console = import ./modules/csfx-console.nix;
-        csfx-autoinstall = import ./modules/csfx-autoinstall.nix;
-        update-units = import ./modules/update-units.nix;
+        csfx-agent = import ./modules/agent/csfx-agent.nix;
+        csfx-cp = import ./modules/control-plane/csfx-cp.nix;
+        csfx-garage = import ./modules/storage/csfx-garage.nix;
+        csfx-binary-cache = import ./modules/registry/csfx-binary-cache.nix;
+        csfx-registry-mirror = import ./modules/registry/csfx-registry-mirror.nix;
+        csfx-site-registry = import ./modules/registry/csfx-site-registry.nix;
+        csfx-setup = import ./modules/node/csfx-setup.nix;
+        csfx-cluster = import ./modules/cluster/csfx-cluster.nix;
+        csfx-openbao = import ./modules/cluster/csfx-openbao.nix;
+        csfx-ingress = import ./modules/control-plane/csfx-ingress.nix;
+        csfx-console = import ./modules/node/csfx-console.nix;
+        csfx-autoinstall = import ./modules/node/csfx-autoinstall.nix;
+        update-units = import ./modules/update/update-units.nix;
       };
 
       nixosConfigurations = {

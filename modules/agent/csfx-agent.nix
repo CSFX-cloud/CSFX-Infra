@@ -156,11 +156,6 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    virtualisation.docker = {
-      enable = lib.mkDefault true;
-      enableOnBoot = lib.mkDefault false;
-    };
-
     environment.systemPackages = [ pkgs.wireguard-tools pkgs.iproute2 ];
 
     networking.firewall = {
@@ -183,7 +178,7 @@ in
       polkit.enable = true;
       polkit.extraConfig = ''
         polkit.addRule(function(action, subject) {
-          var managedUnits = ["docker.service", "reboot.target", "poweroff.target"${lib.optionalString cfg.enableSsh '', "sshd.service"''}];
+          var managedUnits = ["reboot.target", "poweroff.target"${lib.optionalString cfg.enableSsh '', "sshd.service"''}];
           if (action.id == "org.freedesktop.systemd1.manage-units" &&
               managedUnits.indexOf(action.lookup("unit")) !== -1 &&
               subject.user == "csfx-agent") {
@@ -231,7 +226,7 @@ in
           group = "csfx-agent";
           home = "/var/lib/csfx-agent";
           createHome = true;
-          extraGroups = [ "docker" ] ++ lib.optionals (cfg.enableFirecracker || cfg.enableQemu) [ "kvm" ];
+          extraGroups = lib.optionals (cfg.enableFirecracker || cfg.enableQemu) [ "kvm" ];
         };
         csfx-updater = {
           isSystemUser = true;

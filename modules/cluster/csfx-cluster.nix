@@ -3,7 +3,7 @@
 let
   cfg = config.services.csfx-cluster;
   cp = config.services.csfx-cp;
-  nodeName = import ./node-name.nix pkgs;
+  nodeName = import ../node/node-name.nix pkgs;
 
   runDir = "/run/csfx-cluster";
   haproxyDir = "/run/csfx-haproxy";
