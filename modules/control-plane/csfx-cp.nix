@@ -106,6 +106,13 @@ let
   siteEnvFile = "/run/csfx-site/site.env";
   clusterEnvPath = "/etc/csfx/cluster.env";
   siteBuilderPort = 8007;
+  hasDashboard = cfg.dashboard.assets != null;
+  dashboardPort = 3000;
+  dashboardUrl = "http://127.0.0.1:${toString dashboardPort}";
+  dashboardLauncher = pkgs.writeShellScript "csfx-dashboard" ''
+    export NODE_EXTRA_CA_CERTS="$CREDENTIALS_DIRECTORY/ca.crt"
+    exec ${pkgs.nodejs}/bin/node ${cfg.dashboard.assets}
+  '';
   siteEdgePort = 8010;
   siteRegistryPort = 5060;
   mirrorPort = 5050;
@@ -213,6 +220,7 @@ let
       "csfx-db-init::DB Init"
       "csfx-migrate::DB Migration"
       "csfx-api-gateway:8000:API Gateway"
+      "csfx-dashboard:3000:Dashboard"
       "csfx-registry:8001:Registry"
       "csfx-scheduler:8002:Scheduler"
       "csfx-volume-manager:8003:Volume Manager"
@@ -292,6 +300,13 @@ in
     dbUrl = lib.mkOption {
       type = lib.types.str;
       description = "PostgreSQL connection URL";
+    };
+
+    dashboard.assets = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = frontendAssets;
+      defaultText = lib.literalExpression "the pinned frontend release, null when none is pinned";
+      description = "Directory with the built dashboard server, run by the csfx-dashboard unit and reached through the api gateway. Null runs no dashboard and leaves the gateway without a frontend.";
     };
 
     etcdEndpoints = lib.mkOption {
@@ -572,7 +587,33 @@ in
             RELEASE_BASE_URL = cfg.updater.releaseBaseUrl;
           } // lib.optionalAttrs hasSiteBuilder {
             SITE_BUILDER_URL = "http://localhost:${toString siteBuilderPort}";
-          } // (if hasFrontend then { STATIC_DIR = "${frontendAssets}"; } else { });
+          } // lib.optionalAttrs hasDashboard { APP_URL = dashboardUrl; };
+        };
+
+        csfx-dashboard = lib.mkIf hasDashboard {
+          description = "CSFX Dashboard";
+          after = [ "network.target" "csfx-api-gateway.service" ];
+          wants = [ "csfx-api-gateway.service" ];
+          wantedBy = [ "multi-user.target" ];
+          unitConfig = controlPlaneOnly;
+          environment = {
+            HOST = "127.0.0.1";
+            PORT = toString dashboardPort;
+            API_GATEWAY_URL = "https://localhost:8000";
+            PROTOCOL_HEADER = "x-forwarded-proto";
+            HOST_HEADER = "x-forwarded-host";
+          };
+          serviceConfig = {
+            ExecStart = dashboardLauncher;
+            LoadCredential = [ "ca.crt:/var/lib/csfx-cp/ca.crt" ];
+            Restart = "on-failure";
+            RestartSec = "5s";
+            DynamicUser = true;
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            ProtectSystem = "strict";
+            ProtectHome = true;
+          };
         };
 
         csfx-registry = mkService {
