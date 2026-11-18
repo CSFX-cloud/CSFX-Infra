@@ -568,6 +568,7 @@ in
           binName = "api-gateway";
           listenAddr = "0.0.0.0";
           stateDirectory = "csfx-cp";
+          path = [ pkgs.postgresql_16 ];
           after = [ "csfx-registry.service" "csfx-setup-code.service" "csfx-site-env.service" ];
           requires = [ "csfx-registry.service" "csfx-setup-code.service" ];
           wants = lib.optional hasSiteBuilder "csfx-site-env.service";
