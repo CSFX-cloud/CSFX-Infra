@@ -57,6 +57,7 @@ let
         fi
 
         mkdir -p /etc/csfx /var/lib/csfx
+        umask 0077
 
         JWT_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         DB_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 16)
