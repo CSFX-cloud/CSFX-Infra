@@ -661,9 +661,6 @@ in
           description = "CSFX SDN Controller";
           bin = sdnBin;
           binName = "sdn-controller";
-          extraEnv = {
-            ETCD_URL = cfg.etcdEndpoints;
-          };
         };
 
         csfx-object-storage = lib.mkIf hasObjectStorage (mkService {
