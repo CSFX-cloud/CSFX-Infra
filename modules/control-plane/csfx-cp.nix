@@ -228,24 +228,24 @@ let
 
   mkService = { name, description, bin, binName, secrets, extraEnv ? { }, after ? [ ], requires ? [ ], wants ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, envFiles ? [ ], preStart ? [ ], extraServiceConfig ? { }, path ? [ ] }:
     let scoped = scopedEnv name secrets; in {
-    inherit description path;
-    after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
-    requires = [ "csfx-migrate.service" ] ++ requires;
-    inherit wants;
-    wantedBy = [ "multi-user.target" ];
-    unitConfig = controlPlaneOnly;
-    serviceConfig = hardening // {
-      ExecStart = "${bin}/bin/${binName}";
-      ExecStartPre = scoped.ExecStartPre ++ preStart;
-      EnvironmentFile = scoped.EnvironmentFile ++ envFiles;
-      Restart = "on-failure";
-      RestartSec = "5s";
-      DynamicUser = true;
-    } // lib.optionalAttrs (stateDirectory != null) {
-      StateDirectory = stateDirectory;
-    } // extraServiceConfig;
-    environment = commonEnv // extraEnv // { LISTEN_ADDR = listenAddr; };
-  };
+      inherit description path;
+      after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
+      requires = [ "csfx-migrate.service" ] ++ requires;
+      inherit wants;
+      wantedBy = [ "multi-user.target" ];
+      unitConfig = controlPlaneOnly;
+      serviceConfig = hardening // {
+        ExecStart = "${bin}/bin/${binName}";
+        ExecStartPre = scoped.ExecStartPre ++ preStart;
+        EnvironmentFile = scoped.EnvironmentFile ++ envFiles;
+        Restart = "on-failure";
+        RestartSec = "5s";
+        DynamicUser = true;
+      } // lib.optionalAttrs (stateDirectory != null) {
+        StateDirectory = stateDirectory;
+      } // extraServiceConfig;
+      environment = commonEnv // extraEnv // { LISTEN_ADDR = listenAddr; };
+    };
 
   statusScript = pkgs.writeShellScriptBin "csfx-status" ''
     set -euo pipefail
@@ -732,15 +732,15 @@ in
           envFiles = [ "-/run/csfx-object-storage/public-url.env" ];
           preStart = [
             (pkgs.writeShellScript "csfx-object-storage-set-public-url" ''
-                set -euo pipefail
+              set -euo pipefail
 
-                IP=$(${primaryAddressScript})
+              IP=$(${primaryAddressScript})
 
-                echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000" \
-                  > /run/csfx-object-storage/public-url.env
+              echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000" \
+                > /run/csfx-object-storage/public-url.env
 
-                echo "[INFO] garage public s3 url set ip=''${IP}"
-              '')
+              echo "[INFO] garage public s3 url set ip=''${IP}"
+            '')
           ];
           extraServiceConfig = {
             SupplementaryGroups = [ "csfx-garage-data" ];
