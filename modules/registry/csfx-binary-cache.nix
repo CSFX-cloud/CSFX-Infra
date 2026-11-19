@@ -23,6 +23,6 @@ in
     systemd.services.harmonia.unitConfig.ConditionPathExists =
       config.services.csfx-cp.controlPlaneConditions;
 
-    networking.firewall.allowedTCPPorts = [ cfg.port ];
+    networking.firewall.interfaces.wgmgmt0.allowedTCPPorts = [ cfg.port ];
   };
 }
