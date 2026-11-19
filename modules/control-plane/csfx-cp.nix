@@ -184,24 +184,68 @@ let
     LoadCredential = "ceph.keyring:${toString cfg.ceph.keyringPath}";
   };
 
-  mkService = { description, bin, binName, extraEnv ? { }, after ? [ ], requires ? [ ], wants ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, extraServiceConfig ? { }, path ? [ ] }: {
-    inherit description path;
-    after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
-    requires = [ "csfx-migrate.service" ] ++ requires;
-    inherit wants;
-    wantedBy = [ "multi-user.target" ];
-    unitConfig = controlPlaneOnly;
-    serviceConfig = {
-      ExecStart = "${bin}/bin/${binName}";
-      Restart = "on-failure";
-      RestartSec = "5s";
-      DynamicUser = true;
-      EnvironmentFile = cfg.envFile;
-    } // lib.optionalAttrs (stateDirectory != null) {
-      StateDirectory = stateDirectory;
-    } // extraServiceConfig;
-    environment = commonEnv // extraEnv // { LISTEN_ADDR = listenAddr; };
+  # Denylist: every new secret in cp.env must be listed here, otherwise it reaches every control plane service.
+  secretKeys = [
+    "DATABASE_URL"
+    "DATABASE_DIRECT_URL"
+    "JWT_SECRET"
+    "CSFX_SECRET_KEY"
+    "GARAGE_ADMIN_TOKEN"
+    "OBJECT_STORAGE_ENCRYPTION_KEY"
+    "CSFX_ENV_ENCRYPTION_KEY"
+    "CSFX_SITE_SECRET"
+  ];
+
+  scopedEnvDir = "/run/csfx-env";
+
+  scopedEnvScript = pkgs.writeShellScript "csfx-scoped-env" ''
+    set -euo pipefail
+
+    target=${scopedEnvDir}/$1.env
+    umask 0077
+    ${pkgs.coreutils}/bin/mkdir -p ${scopedEnvDir}
+    ${pkgs.gnugrep}/bin/grep -Ev "^($2)=" ${cfg.envFile} > "$target.tmp" || [ $? -eq 1 ]
+    ${pkgs.coreutils}/bin/mv "$target.tmp" "$target"
+  '';
+
+  scopedEnv = name: secrets: {
+    ExecStartPre = [ "+${scopedEnvScript} ${name} '${lib.concatStringsSep "|" (lib.subtractLists secrets secretKeys)}'" ];
+    EnvironmentFile = [ "-${scopedEnvDir}/${name}.env" ];
   };
+
+  hardening = {
+    NoNewPrivileges = true;
+    ProtectSystem = "strict";
+    ProtectHome = true;
+    PrivateTmp = true;
+    CapabilityBoundingSet = "";
+    ProtectKernelTunables = true;
+    ProtectKernelModules = true;
+    ProtectControlGroups = true;
+    LockPersonality = true;
+    RestrictSUIDSGID = true;
+  };
+
+  mkService = { name, description, bin, binName, secrets, extraEnv ? { }, after ? [ ], requires ? [ ], wants ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, envFiles ? [ ], preStart ? [ ], extraServiceConfig ? { }, path ? [ ] }:
+    let scoped = scopedEnv name secrets; in {
+      inherit description path;
+      after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
+      requires = [ "csfx-migrate.service" ] ++ requires;
+      inherit wants;
+      wantedBy = [ "multi-user.target" ];
+      unitConfig = controlPlaneOnly;
+      serviceConfig = hardening // {
+        ExecStart = "${bin}/bin/${binName}";
+        ExecStartPre = scoped.ExecStartPre ++ preStart;
+        EnvironmentFile = scoped.EnvironmentFile ++ envFiles;
+        Restart = "on-failure";
+        RestartSec = "5s";
+        DynamicUser = true;
+      } // lib.optionalAttrs (stateDirectory != null) {
+        StateDirectory = stateDirectory;
+      } // extraServiceConfig;
+      environment = commonEnv // extraEnv // { LISTEN_ADDR = listenAddr; };
+    };
 
   statusScript = pkgs.writeShellScriptBin "csfx-status" ''
     set -euo pipefail
@@ -551,32 +595,31 @@ in
           requires = [ "csfx-db-init.service" ];
           wantedBy = [ "multi-user.target" ];
           unitConfig = controlPlaneOnly // { StartLimitIntervalSec = 0; };
-          serviceConfig = {
+          serviceConfig = hardening // scopedEnv "csfx-migrate" [ "DATABASE_URL" "DATABASE_DIRECT_URL" ] // {
             Type = "oneshot";
             RemainAfterExit = true;
             Restart = "on-failure";
             RestartSec = "5s";
             ExecStart = "${migrateBin}/bin/csfx-migrate";
-            EnvironmentFile = cfg.envFile;
+            DynamicUser = true;
           };
           environment = commonEnv;
         };
 
         csfx-api-gateway = mkService {
+          name = "csfx-api-gateway";
           description = "CSFX API Gateway";
           bin = gatewayBin;
           binName = "api-gateway";
+          secrets = [ "DATABASE_URL" "JWT_SECRET" "CSFX_SECRET_KEY" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" ];
           listenAddr = "0.0.0.0";
           stateDirectory = "csfx-cp";
           path = [ pkgs.postgresql_16 ];
           after = [ "csfx-registry.service" "csfx-setup-code.service" "csfx-site-env.service" ];
           requires = [ "csfx-registry.service" "csfx-setup-code.service" ];
           wants = lib.optional hasSiteBuilder "csfx-site-env.service";
-          extraServiceConfig = {
-            LoadCredential = [ "setup-code:${setupCodeFile}" ];
-          } // lib.optionalAttrs hasSiteBuilder {
-            EnvironmentFile = [ cfg.envFile "-${siteEnvFile}" ];
-          };
+          envFiles = lib.optional hasSiteBuilder "-${siteEnvFile}";
+          extraServiceConfig.LoadCredential = [ "setup-code:${setupCodeFile}" ];
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             VOLUME_MANAGER_URL = "http://localhost:8003";
@@ -618,9 +661,11 @@ in
         };
 
         csfx-registry = mkService {
+          name = "csfx-registry";
           description = "CSFX Registry";
           bin = registryBin;
           binName = "registry";
+          secrets = [ "DATABASE_URL" ];
           stateDirectory = "csfx-cp";
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
@@ -629,9 +674,11 @@ in
         };
 
         csfx-scheduler = mkService {
+          name = "csfx-scheduler";
           description = "CSFX Scheduler";
           bin = schedulerBin;
           binName = "scheduler";
+          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" ];
           extraEnv = {
             API_GATEWAY_URL = "https://localhost:8000";
             SCHEDULER_STRATEGY = cfg.schedulerStrategy;
@@ -639,18 +686,22 @@ in
         };
 
         csfx-volume-manager = mkService {
+          name = "csfx-volume-manager";
           description = "CSFX Volume Manager";
           bin = volumeManagerBin;
           binName = "volume-manager";
+          secrets = [ "DATABASE_URL" ];
           path = lib.optionals cephEnabled [ pkgs.ceph-client ];
           extraEnv = cephEnv;
           extraServiceConfig = cephServiceConfig;
         };
 
         csfx-failover-controller = mkService {
+          name = "csfx-failover-controller";
           description = "CSFX Failover Controller";
           bin = failoverBin;
           binName = "failover-controller";
+          secrets = [ "DATABASE_URL" ];
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             VOLUME_MANAGER_URL = "http://localhost:8003";
@@ -658,15 +709,19 @@ in
         };
 
         csfx-sdn-controller = mkService {
+          name = "csfx-sdn-controller";
           description = "CSFX SDN Controller";
           bin = sdnBin;
           binName = "sdn-controller";
+          secrets = [ "DATABASE_URL" ];
         };
 
         csfx-object-storage = lib.mkIf hasObjectStorage (mkService {
+          name = "csfx-object-storage";
           description = "CSFX Object Storage";
           bin = objectStorageBin;
           binName = "object-storage";
+          secrets = [ "DATABASE_URL" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" ];
           after = [ "garage.service" ];
           requires = [ "garage.service" ];
           extraEnv = {
@@ -674,22 +729,22 @@ in
             GARAGE_ZONE = config.services.csfx-garage.zone;
             GARAGE_DATA_DIR = config.services.csfx-garage.dataDir;
           };
+          envFiles = [ "-/run/csfx-object-storage/public-url.env" ];
+          preStart = [
+            (pkgs.writeShellScript "csfx-object-storage-set-public-url" ''
+              set -euo pipefail
+
+              IP=$(${primaryAddressScript})
+
+              echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000" \
+                > /run/csfx-object-storage/public-url.env
+
+              echo "[INFO] garage public s3 url set ip=''${IP}"
+            '')
+          ];
           extraServiceConfig = {
             SupplementaryGroups = [ "csfx-garage-data" ];
             RuntimeDirectory = "csfx-object-storage";
-            EnvironmentFile = [ cfg.envFile "-/run/csfx-object-storage/public-url.env" ];
-            ExecStartPre = [
-              (pkgs.writeShellScript "csfx-object-storage-set-public-url" ''
-                set -euo pipefail
-
-                IP=$(${primaryAddressScript})
-
-                echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000" \
-                  > /run/csfx-object-storage/public-url.env
-
-                echo "[INFO] garage public s3 url set ip=''${IP}"
-              '')
-            ];
           };
         });
 
@@ -710,9 +765,11 @@ in
         };
 
         csfx-site-builder = lib.mkIf hasSiteBuilder (mkService {
+          name = "csfx-site-builder";
           description = "CSFX Site Builder";
           bin = siteBuilderBin;
           binName = "site-builder";
+          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" ];
           after = [ "csfx-site-env.service" "csfx-scheduler.service" ];
           requires = [ "csfx-site-env.service" ];
           path = [ pkgs.git ];
@@ -724,7 +781,7 @@ in
             CSFX_SITE_BUILDER_IMAGE = "ghcr.io/csfx-cloud/csfx-site-builder:latest";
             CSFX_SITE_REGISTRY_INSECURE = "1";
           };
-          extraServiceConfig.EnvironmentFile = [ cfg.envFile siteEnvFile ];
+          envFiles = [ siteEnvFile ];
         });
 
         csfx-updater = lib.mkIf hasUpdater {
