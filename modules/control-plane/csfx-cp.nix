@@ -729,22 +729,8 @@ in
             GARAGE_ZONE = config.services.csfx-garage.zone;
             GARAGE_DATA_DIR = config.services.csfx-garage.dataDir;
           };
-          envFiles = [ "-/run/csfx-object-storage/public-url.env" ];
-          preStart = [
-            (pkgs.writeShellScript "csfx-object-storage-set-public-url" ''
-              set -euo pipefail
-
-              IP=$(${primaryAddressScript})
-
-              echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000" \
-                > /run/csfx-object-storage/public-url.env
-
-              echo "[INFO] garage public s3 url set ip=''${IP}"
-            '')
-          ];
           extraServiceConfig = {
             SupplementaryGroups = [ "csfx-garage-data" ];
-            RuntimeDirectory = "csfx-object-storage";
           };
         });
 
