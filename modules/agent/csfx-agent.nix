@@ -5,6 +5,7 @@ let
   arch = if pkgs.stdenv.isAarch64 then "arm64" else "amd64";
   qemuSystemBinary =
     if pkgs.stdenv.isAarch64 then "qemu-system-aarch64" else "qemu-system-x86_64";
+  csfxOvmf = pkgs.callPackage ../../pkgs/csfx-ovmf.nix { };
   agentSrc = pkgs.fetchurl {
     inherit (versions.csfx.agent.${arch}) url sha256;
   };
@@ -302,8 +303,8 @@ in
           } // lib.optionalAttrs cfg.enableQemu {
             CSFX_QEMU_BIN_PATH = "${pkgs.qemu_kvm}/bin/${qemuSystemBinary}";
           } // lib.optionalAttrs (cfg.enableQemu && pkgs.stdenv.isAarch64) {
-            CSFX_QEMU_FIRMWARE_CODE_PATH = "${pkgs.OVMF.fd}/FV/AAVMF_CODE.fd";
-            CSFX_QEMU_FIRMWARE_VARS_PATH = "${pkgs.OVMF.fd}/FV/AAVMF_VARS.fd";
+            CSFX_QEMU_FIRMWARE_CODE_PATH = "${csfxOvmf.fd}/FV/AAVMF_CODE.fd";
+            CSFX_QEMU_FIRMWARE_VARS_PATH = "${csfxOvmf.fd}/FV/AAVMF_VARS.fd";
           } // lib.optionalAttrs (cfg.registryMirror != null) {
             CSFX_REGISTRY_MIRROR = cfg.registryMirror;
           } // lib.optionalAttrs (cfg.localDns.servers != [ ]) {
