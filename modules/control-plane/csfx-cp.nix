@@ -166,6 +166,8 @@ let
     echo "[INFO] site environment written ip=$ip edge_host=$edge_host"
   '';
 
+  clusterCaCredential = "ca.crt:/var/lib/csfx-cp/ca.crt";
+
   commonEnv = {
     DATABASE_URL = cfg.dbUrl;
     ETCD_ENDPOINTS = cfg.etcdEndpoints;
@@ -243,8 +245,10 @@ let
         DynamicUser = true;
       } // lib.optionalAttrs (stateDirectory != null) {
         StateDirectory = stateDirectory;
-      } // extraServiceConfig;
-      environment = commonEnv // extraEnv // { LISTEN_ADDR = listenAddr; };
+      } // extraServiceConfig // {
+        LoadCredential = [ clusterCaCredential ] ++ lib.toList (extraServiceConfig.LoadCredential or [ ]);
+      };
+      environment = commonEnv // { CSFX_CA_CERT_PATH = "%d/ca.crt"; } // extraEnv // { LISTEN_ADDR = listenAddr; };
     };
 
   statusScript = pkgs.writeShellScriptBin "csfx-status" ''
@@ -649,7 +653,7 @@ in
           };
           serviceConfig = {
             ExecStart = dashboardLauncher;
-            LoadCredential = [ "ca.crt:/var/lib/csfx-cp/ca.crt" ];
+            LoadCredential = [ clusterCaCredential ];
             Restart = "on-failure";
             RestartSec = "5s";
             DynamicUser = true;
@@ -729,22 +733,8 @@ in
             GARAGE_ZONE = config.services.csfx-garage.zone;
             GARAGE_DATA_DIR = config.services.csfx-garage.dataDir;
           };
-          envFiles = [ "-/run/csfx-object-storage/public-url.env" ];
-          preStart = [
-            (pkgs.writeShellScript "csfx-object-storage-set-public-url" ''
-              set -euo pipefail
-
-              IP=$(${primaryAddressScript})
-
-              echo "GARAGE_PUBLIC_S3_URL=https://''${IP}:8000" \
-                > /run/csfx-object-storage/public-url.env
-
-              echo "[INFO] garage public s3 url set ip=''${IP}"
-            '')
-          ];
           extraServiceConfig = {
             SupplementaryGroups = [ "csfx-garage-data" ];
-            RuntimeDirectory = "csfx-object-storage";
           };
         });
 
