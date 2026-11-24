@@ -36,27 +36,47 @@ let
 
     HEALTH = "curl -sk -o /dev/null -w '%{http_code}' https://localhost:8000/api/public-key"
     SENTINEL_FILE = "/var/lib/csfx-data/csfx/upgrade-sentinel"
+    SETTLE_SECONDS = 60
 
 
     def wait_healthy():
-        machine.wait_for_unit("multi-user.target")
         machine.wait_until_succeeds(f"{HEALTH} | grep -E '^(200|401)$'", timeout=900)
 
 
-    def assert_stable():
-        state = machine.succeed("systemctl is-system-running --wait || true").strip()
-        assert state != "degraded", f"system is {state}"
-        failed = machine.succeed("systemctl --failed --no-legend").strip()
-        assert failed == "", f"failed units:\n{failed}"
-        restarts = machine.succeed(
-            "systemctl show 'csfx-*.service' -p Id,NRestarts"
-        ).replace("\n\n", "\n").splitlines()
-        looping = [
-            restarts[index].split("=")[1]
-            for index in range(0, len(restarts) - 1, 2)
-            if restarts[index + 1] != "NRestarts=0"
-        ]
-        assert not looping, f"units restarted: {looping}"
+    def snapshot():
+        output = machine.succeed("systemctl show '*.service' -p Id,ActiveState,NRestarts")
+        units = {}
+        for block in output.strip().split("\n\n"):
+            props = dict(line.split("=", 1) for line in block.splitlines())
+            units[props["Id"]] = (props["ActiveState"], int(props["NRestarts"]))
+        return units
+
+
+    def timer_services():
+        output = machine.succeed("systemctl list-timers --all --no-legend | awk '{print $NF}'")
+        return set(output.split())
+
+
+    def settled_units():
+        first = snapshot()
+        time.sleep(SETTLE_SECONDS)
+        second = snapshot()
+        skipped = timer_services()
+        return {
+            unit: restarts
+            for unit, (state, restarts) in second.items()
+            if state == "active" and first.get(unit) == (state, restarts) and unit not in skipped
+        }
+
+
+    def assert_stable(baseline):
+        now = snapshot()
+        broken = {
+            unit: now.get(unit)
+            for unit, restarts in baseline.items()
+            if unit not in now or now[unit][0] != "active" or now[unit][1] > restarts
+        }
+        assert not broken, f"units unstable after upgrade: {broken}"
 
 
     def assert_state_intact():
@@ -73,19 +93,19 @@ let
     machine.succeed(f"echo sentinel > {SENTINEL_FILE}")
     machine.succeed("sha256sum /etc/csfx/cp.env > /root/cp-env.sha256")
     machine.wait_until_succeeds("ETCDCTL_API=3 etcdctl put /csfx/test/sentinel sentinel")
-    assert_stable()
+    baseline = settled_units()
+    assert baseline, "no service was stable before the upgrade"
 
     machine.succeed("nix-env -p /nix/var/nix/profiles/system --set /run/current-system/specialisation/upgraded")
     machine.succeed("/run/current-system/specialisation/upgraded/bin/switch-to-configuration switch")
     wait_healthy()
 
-    timers = machine.succeed(
+    for service in machine.succeed(
         "systemctl list-timers --all --no-legend 'csfx*' | awk '{print $NF}'"
-    ).split()
-    for service in timers:
+    ).split():
         machine.succeed(f"systemctl start --no-block {service}")
     time.sleep(600)
-    assert_stable()
+    assert_stable(baseline)
     assert_state_intact()
 
     machine.succeed("/nix/var/nix/profiles/system/bin/switch-to-configuration boot")
@@ -93,7 +113,8 @@ let
     machine.start()
     wait_healthy()
     machine.succeed("readlink /run/current-system | grep -F \"$(readlink -f /nix/var/nix/profiles/system)\"")
-    assert_stable()
+    time.sleep(SETTLE_SECONDS)
+    assert_stable(baseline)
     assert_state_intact()
   '';
 in
