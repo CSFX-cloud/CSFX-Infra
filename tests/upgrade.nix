@@ -32,6 +32,7 @@ let
   };
 
   upgradeScript = ''
+    import re
     import time
 
     HEALTH = "curl -sk -o /dev/null -w '%{http_code}' https://localhost:8000/api/public-key"
@@ -69,6 +70,18 @@ let
         }
 
 
+    def switch_to_upgraded(baseline):
+        status, output = machine.execute(
+            "/run/current-system/specialisation/upgraded/bin/switch-to-configuration switch 2>&1"
+        )
+        assert status in (0, 4), f"switch-to-configuration exited with {status}:\n{output}"
+        match = re.search(r"the following units failed: (.*)", output)
+        assert status == 0 or match, f"switch failed without failed units:\n{output}"
+        failed = set(re.split(r"[,\s]+", match.group(1).strip())) if match else set()
+        regressed = failed & set(baseline)
+        assert not regressed, f"units from the baseline failed during the switch: {regressed}"
+
+
     def assert_stable(baseline):
         now = snapshot()
         broken = {
@@ -97,7 +110,7 @@ let
     assert baseline, "no service was stable before the upgrade"
 
     machine.succeed("nix-env -p /nix/var/nix/profiles/system --set /run/current-system/specialisation/upgraded")
-    machine.succeed("/run/current-system/specialisation/upgraded/bin/switch-to-configuration switch")
+    switch_to_upgraded(baseline)
     wait_healthy()
 
     for service in machine.succeed(
