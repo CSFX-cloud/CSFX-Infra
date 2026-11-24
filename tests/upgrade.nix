@@ -45,11 +45,11 @@ let
 
 
     def snapshot():
-        output = machine.succeed("systemctl show '*.service' -p Id,ActiveState,NRestarts")
+        output = machine.succeed("systemctl show '*.service' -p Id,ActiveState,NRestarts,Type")
         units = {}
         for block in output.strip().split("\n\n"):
             props = dict(line.split("=", 1) for line in block.splitlines())
-            units[props["Id"]] = (props["ActiveState"], int(props["NRestarts"]))
+            units[props["Id"]] = (props["ActiveState"], int(props["NRestarts"]), props["Type"])
         return units
 
 
@@ -64,9 +64,9 @@ let
         second = snapshot()
         skipped = timer_services()
         return {
-            unit: restarts
-            for unit, (state, restarts) in second.items()
-            if state == "active" and first.get(unit) == (state, restarts) and unit not in skipped
+            unit: (restarts, kind)
+            for unit, (state, restarts, kind) in second.items()
+            if state == "active" and first.get(unit) == (state, restarts, kind) and unit not in skipped
         }
 
 
@@ -86,7 +86,8 @@ let
         now = snapshot()
         broken = {
             unit: now.get(unit)
-            for unit, restarts in baseline.items()
+            for unit, (restarts, kind) in baseline.items()
+            if kind != "oneshot"
             if unit not in now or now[unit][0] != "active" or now[unit][1] > restarts
         }
         assert not broken, f"units unstable after upgrade: {broken}"
