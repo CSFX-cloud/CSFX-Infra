@@ -5,9 +5,10 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
     pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
+    csfx-prev.url = "github:CSFX-cloud/CSFX-Infra";
   };
 
-  outputs = { self, nixpkgs, pre-commit-hooks }:
+  outputs = { self, nixpkgs, pre-commit-hooks, csfx-prev }:
     let
       versions = import ./versions.nix;
       system = "x86_64-linux";
@@ -115,12 +116,20 @@
       };
     in
     {
-      checks.${system}.pre-commit = pre-commit-hooks.lib.${system}.run {
-        src = ./.;
-        hooks = {
-          nixpkgs-fmt.enable = true;
-          statix.enable = true;
-          deadnix.enable = true;
+      checks.${system} = {
+        pre-commit = pre-commit-hooks.lib.${system}.run {
+          src = ./.;
+          hooks = {
+            nixpkgs-fmt.enable = true;
+            statix.enable = true;
+            deadnix.enable = true;
+          };
+        };
+
+        upgrade-n1-to-n = import ./tests/upgrade.nix {
+          inherit pkgs;
+          previous = csfx-prev.nixosConfigurations.csfx-node;
+          current = self.nixosConfigurations.csfx-node;
         };
       };
 
