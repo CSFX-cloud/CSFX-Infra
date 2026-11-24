@@ -1,0 +1,54 @@
+name: Upgrade test
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Upgrade N-1 to N
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Resolve previous release
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh release list --repo "${{ github.repository }}" --limit 1 --json tagName -q '.[0].tagName')
+          if [ -z "$TAG" ]; then
+            echo "[WARN] no previous release, upgrade test skipped"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        if: steps.previous.outputs.tag != ''
+        with:
+          tool-cache: true
+          large-packages: false
+
+      - uses: DeterminateSystems/nix-installer-action@v17
+        if: steps.previous.outputs.tag != ''
+
+      - uses: DeterminateSystems/magic-nix-cache-action@v9
+        if: steps.previous.outputs.tag != ''
+
+      - name: Require KVM
+        if: steps.previous.outputs.tag != ''
+        run: test -c /dev/kvm
+
+      - name: Run upgrade test
+        if: steps.previous.outputs.tag != ''
+        run: |
+          nix build -L .#checks.x86_64-linux.upgrade-n1-to-n \
+            --override-input csfx-prev "github:${{ github.repository }}/${{ steps.previous.outputs.tag }}"

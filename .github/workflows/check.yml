@@ -4,6 +4,11 @@ on:
   pull_request:
 
 jobs:
+  upgrade-test:
+    uses: ./.github/workflows/upgrade-test.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+
   nix-check:
     name: Nix flake check
     runs-on: ubuntu-latest
