@@ -63,7 +63,7 @@ let
           echo "[INFO] site secret added file=$ENV_FILE"
         fi
 
-        if [ -f "$ENV_FILE" ] && [ ! -f "$JOIN_ENV_FILE" ] && ! ${pkgs.gnugrep}/bin/grep -q '^CSFX_INTERNAL_TOKEN=' "$ENV_FILE"; then
+        if [ -f "$ENV_FILE" ] && ! ${pkgs.gnugrep}/bin/grep -q '^CSFX_INTERNAL_TOKEN=' "$ENV_FILE"; then
           printf 'CSFX_INTERNAL_TOKEN=%s\n' "$(${pkgs.openssl}/bin/openssl rand -hex 32)" >> "$ENV_FILE"
           echo "[INFO] internal token added file=$ENV_FILE"
         fi

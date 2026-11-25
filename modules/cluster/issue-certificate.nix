@@ -7,6 +7,7 @@
 
     if [ -s "$certificate" ] && [ -s "$key" ] \
       && [ "$(${pkgs.coreutils}/bin/cat "$marker" 2>/dev/null)" = "$subject_alt_names" ] \
+      && ${pkgs.openssl}/bin/openssl verify -CAfile ${caCert} "$certificate" > /dev/null 2>&1 \
       && ${pkgs.openssl}/bin/openssl x509 -checkend ${toString renewBeforeSeconds} -noout -in "$certificate" > /dev/null; then
       return 0
     fi

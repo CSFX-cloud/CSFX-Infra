@@ -135,8 +135,14 @@ let
     done
 
     peer_scheme=http
-    if [ -s ${etcdPeerCaCert} ] && [ -s ${etcdPeerCaKey} ]; then
+    if [ -f ${joinEnvFile} ]; then
+      if ${pkgs.gnugrep}/bin/grep -q '^ETCD_INITIAL_CLUSTER=.*https://' ${joinEnvFile}; then
+        peer_scheme=https
+      fi
+    elif [ -s ${etcdPeerCaCert} ] && [ -s ${etcdPeerCaKey} ]; then
       peer_scheme=https
+    fi
+    if [ "$peer_scheme" = "https" ]; then
       ${issueEtcdPeerCertificate}
       peer_sans="IP:127.0.0.1"
       if [ "$advertise" != "127.0.0.1" ]; then
@@ -299,50 +305,11 @@ let
   meshAclPorts = lib.concatMapStringsSep "," toString [ etcdPeerPort patroniApiPort postgresPort ];
   meshMastersFile = "/etc/csfx/mesh-masters";
 
-  meshAclScript = pkgs.writeShellScript "csfx-mesh-acl" ''
-    set -euo pipefail
-
-    IPTABLES=${pkgs.iptables}/bin/iptables
-    ip_pattern='[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
-
-    $IPTABLES -n -L ${meshAclChain} > /dev/null 2>&1 || exit 0
-
-    own=""
-    if [ -f ${agentConfig} ]; then
-      own=$(${pkgs.jq}/bin/jq -r '.wg_tunnel_ip // empty' ${agentConfig})
-    fi
-
-    from_join=""
-    if [ -f ${joinEnvFile} ]; then
-      from_join=$(${pkgs.gnugrep}/bin/grep '^ETCD_INITIAL_CLUSTER=' ${joinEnvFile} | ${pkgs.gnugrep}/bin/grep -oE "$ip_pattern" || true)
-    fi
-
-    from_etcd=$(${pkgs.etcd}/bin/etcdctl --endpoints=${etcdEndpoint} member list 2>/dev/null | ${pkgs.gnugrep}/bin/grep -oE "https?://$ip_pattern:${toString etcdPeerPort}" | ${pkgs.gnugrep}/bin/grep -oE "$ip_pattern" || true)
-    if [ -n "$from_etcd" ]; then
-      printf '%s\n' "$from_etcd" | ${pkgs.coreutils}/bin/sort -u > ${meshMastersFile}
-    fi
-    cached=$(${pkgs.coreutils}/bin/cat ${meshMastersFile} 2>/dev/null || true)
-
-    masters=$(printf '%s\n' "$own" "$from_join" "$from_etcd" "$cached" | ${pkgs.gnugrep}/bin/grep -E "^$ip_pattern$" | ${pkgs.coreutils}/bin/sort -u || true)
-
-    staging=$(${pkgs.coreutils}/bin/mktemp)
-    trap '${pkgs.coreutils}/bin/rm -f "$staging"' EXIT
-    {
-      echo "*filter"
-      echo ":${meshAclChain} - [0:0]"
-      if [ -z "$masters" ]; then
-        echo "-A ${meshAclChain} -j ACCEPT"
-      else
-        for master in $masters; do
-          echo "-A ${meshAclChain} -s $master/32 -j ACCEPT"
-        done
-        echo "-A ${meshAclChain} -j DROP"
-      fi
-      echo "COMMIT"
-    } > "$staging"
-    ${pkgs.iptables}/bin/iptables-restore --noflush < "$staging"
-    echo "[INFO] mesh acl applied masters=$(echo $masters | ${pkgs.coreutils}/bin/tr ' ' ',')"
-  '';
+  meshAclScript = import ./mesh-acl-script.nix {
+    inherit pkgs agentConfig joinEnvFile etcdEndpoint etcdPeerPort;
+    chain = meshAclChain;
+    mastersFile = meshMastersFile;
+  };
 
   clusterUnit = {
     unitConfig.ConditionPathExists = cp.controlPlaneConditions;
@@ -418,6 +385,7 @@ in
         iptables -N ${meshAclChain} 2>/dev/null || iptables -F ${meshAclChain}
         iptables -A ${meshAclChain} -j ACCEPT
         iptables -A nixos-fw -i wgmgmt0 -p tcp -m multiport --dports ${meshAclPorts} -j ${meshAclChain}
+        ${meshAclScript} || true
       '';
       extraStopCommands = ''
         iptables -F ${meshAclChain} 2>/dev/null || true
@@ -507,6 +475,7 @@ in
           environment = lib.mkIf (cfg.vip.address != null) (vipEnvironment // {
             TLS_SANS = "localhost,127.0.0.1,${cfg.vip.address}";
           });
+          after = [ "csfx-cluster-env.service" ];
           serviceConfig.EnvironmentFile = lib.mkAfter [ "-${clusterEnvFile}" ];
           serviceConfig.LoadCredential = [
             "garage-env:/etc/csfx/garage.env"
@@ -532,7 +501,7 @@ in
         csfx-mesh-acl = clusterUnit // {
           description = "CSFX mesh access list for cluster ports";
           wantedBy = [ "firewall.service" ];
-          after = [ "firewall.service" "etcd.service" ];
+          after = [ "firewall.service" ];
           serviceConfig = {
             Type = "oneshot";
             ExecStart = "${meshAclScript}";
