@@ -685,7 +685,6 @@ in
           binName = "scheduler";
           secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_INTERNAL_TOKEN" ];
           extraEnv = {
-            API_GATEWAY_URL = "https://localhost:8000";
             SCHEDULER_STRATEGY = cfg.schedulerStrategy;
           };
         };
