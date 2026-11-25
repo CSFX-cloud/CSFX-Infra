@@ -196,6 +196,7 @@ let
     "OBJECT_STORAGE_ENCRYPTION_KEY"
     "CSFX_ENV_ENCRYPTION_KEY"
     "CSFX_SITE_SECRET"
+    "CSFX_INTERNAL_TOKEN"
   ];
 
   scopedEnvDir = "/run/csfx-env";
@@ -615,7 +616,7 @@ in
           description = "CSFX API Gateway";
           bin = gatewayBin;
           binName = "api-gateway";
-          secrets = [ "DATABASE_URL" "JWT_SECRET" "CSFX_SECRET_KEY" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" ];
+          secrets = [ "DATABASE_URL" "JWT_SECRET" "CSFX_SECRET_KEY" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" "CSFX_INTERNAL_TOKEN" ];
           listenAddr = "0.0.0.0";
           stateDirectory = "csfx-cp";
           path = [ pkgs.postgresql_16 ];
@@ -669,7 +670,7 @@ in
           description = "CSFX Registry";
           bin = registryBin;
           binName = "registry";
-          secrets = [ "DATABASE_URL" ];
+          secrets = [ "DATABASE_URL" "CSFX_INTERNAL_TOKEN" ];
           stateDirectory = "csfx-cp";
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
@@ -682,7 +683,7 @@ in
           description = "CSFX Scheduler";
           bin = schedulerBin;
           binName = "scheduler";
-          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" ];
+          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_INTERNAL_TOKEN" ];
           extraEnv = {
             API_GATEWAY_URL = "https://localhost:8000";
             SCHEDULER_STRATEGY = cfg.schedulerStrategy;
