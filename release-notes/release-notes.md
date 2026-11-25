@@ -1,7 +1,12 @@
-**Pre-release** - 2026-11-22
+**Pre-release** - 2026-11-25
 
 ## New
 
+- carry the etcd peer ca in the master join bundle and derive the peer url scheme from it
+- sign short lived service tokens per request and bind them to the calling service
+- require the service token on every control plane service api
+- block releases that lack migrations of the previous release
+- open a release pull request in infra instead of pushing to main
 - remove orphaned vm directories and superseded rootfs images
 - add editable vm settings for compute, storage and network
 - report stats for qemu vms and keep them running when qmp is unresponsive
@@ -79,6 +84,11 @@
 
 ## Fixed
 
+- fail fast without a service token, clean stale etcd peer material on join and share the hex helpers
+- move the gateway internal listener off the site edge port
+- serve internal gateway routes on a loopback listener and authenticate authorized keys requests
+- authenticate internal endpoints with a service token instead of source IP ranges
+- update cookie to 0.18.3 for RUSTSEC-2026-0594
 - hand out the resource group dns server via dhcp
 - migrate the dashboard tsconfig and env access to sveltekit 3
 - update url to 2.5.9 for RUSTSEC-2026-0592
