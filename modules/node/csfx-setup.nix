@@ -40,6 +40,17 @@ let
     chmod 0700 "$MOUNT/postgresql"
   '';
 
+  etcdPeerCaStep = lib.optionalString (lib.attrByPath [ "services" "csfx-cluster" "enable" ] false config) ''
+    if [ ! -s /etc/csfx/etcd-peer-ca.crt ]; then
+      ${pkgs.openssl}/bin/openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+        -keyout /etc/csfx/etcd-peer-ca.key -out /etc/csfx/etcd-peer-ca.crt \
+        -days 3650 -subj "/CN=csfx-etcd-peer-ca"
+      chmod 0600 /etc/csfx/etcd-peer-ca.key
+      chmod 0644 /etc/csfx/etcd-peer-ca.crt
+      echo "[INFO] etcd peer ca created file=/etc/csfx/etcd-peer-ca.crt"
+    fi
+  '';
+
   setupScript = pkgs.writeShellScript "csfx-setup" ''
         set -euo pipefail
 
@@ -50,6 +61,11 @@ let
         if [ -f "$ENV_FILE" ] && [ ! -f "$JOIN_ENV_FILE" ] && ! ${pkgs.gnugrep}/bin/grep -q '^CSFX_SITE_SECRET=' "$ENV_FILE"; then
           printf 'CSFX_SITE_SECRET=%s\n' "$(${pkgs.openssl}/bin/openssl rand -hex 32)" >> "$ENV_FILE"
           echo "[INFO] site secret added file=$ENV_FILE"
+        fi
+
+        if [ -f "$ENV_FILE" ] && ! ${pkgs.gnugrep}/bin/grep -q '^CSFX_INTERNAL_TOKEN=' "$ENV_FILE"; then
+          printf 'CSFX_INTERNAL_TOKEN=%s\n' "$(${pkgs.openssl}/bin/openssl rand -hex 32)" >> "$ENV_FILE"
+          echo "[INFO] internal token added file=$ENV_FILE"
         fi
 
         if [ -f "$DONE_FILE" ]; then
@@ -67,6 +83,9 @@ let
         GARAGE_RPC_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         OBJECT_STORAGE_ENCRYPTION_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         SITE_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+        INTERNAL_TOKEN=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+
+        ${etcdPeerCaStep}
 
         cat > "$ENV_FILE" <<EOF
     DATABASE_URL=postgres://csfx:$DB_PASSWORD@127.0.0.1:6432/csfx
@@ -76,6 +95,7 @@ let
     GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN_TOKEN
     OBJECT_STORAGE_ENCRYPTION_KEY=$OBJECT_STORAGE_ENCRYPTION_KEY
     CSFX_SITE_SECRET=$SITE_SECRET
+    CSFX_INTERNAL_TOKEN=$INTERNAL_TOKEN
     EOF
         chmod 0600 "$ENV_FILE"
 

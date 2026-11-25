@@ -58,6 +58,12 @@ let
     fi
   '';
 
+  issueCertificate = import ./issue-certificate.nix {
+    inherit pkgs renewBeforeSeconds;
+    caCert = clusterCaCert;
+    caKey = clusterCaKey;
+  };
+
   prepareScript = pkgs.writeShellScript "csfx-openbao-prepare" ''
     set -euo pipefail
 
@@ -85,32 +91,7 @@ let
       sans="$sans,IP:$vip"
     fi
 
-    issue() {
-      name="$1"
-      common_name="$2"
-      subject_alt_names="$3"
-      certificate="$4"
-      key="$5"
-      marker="$certificate.sans"
-
-      if [ -s "$certificate" ] && [ -s "$key" ] \
-        && [ "$(${pkgs.coreutils}/bin/cat "$marker" 2>/dev/null)" = "$subject_alt_names" ] \
-        && ${pkgs.openssl}/bin/openssl x509 -checkend ${toString renewBeforeSeconds} -noout -in "$certificate" > /dev/null; then
-        return 0
-      fi
-
-      staging=$(${pkgs.coreutils}/bin/mktemp -d)
-      ${pkgs.openssl}/bin/openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
-        -keyout "$staging/key.pem" -subj "/CN=$common_name" -out "$staging/request.pem"
-      printf 'subjectAltName=%s\nextendedKeyUsage=serverAuth,clientAuth\nkeyUsage=digitalSignature\n' "$subject_alt_names" > "$staging/extensions.cnf"
-      ${pkgs.openssl}/bin/openssl x509 -req -in "$staging/request.pem" -CA ${clusterCaCert} -CAkey ${clusterCaKey} \
-        -CAcreateserial -CAserial "$staging/serial" -days 365 -extfile "$staging/extensions.cnf" -out "$staging/certificate.pem"
-      ${pkgs.coreutils}/bin/install -m 0600 "$staging/key.pem" "$key"
-      ${pkgs.coreutils}/bin/install -m 0644 "$staging/certificate.pem" "$certificate"
-      printf '%s' "$subject_alt_names" > "$marker"
-      ${pkgs.coreutils}/bin/rm -rf "$staging"
-      echo "[INFO] certificate issued name=$name"
-    }
+    ${issueCertificate}
 
     ${pkgs.coreutils}/bin/mkdir -p /etc/csfx
     if [ ! -s ${sealKeyFile} ]; then

@@ -196,6 +196,7 @@ let
     "OBJECT_STORAGE_ENCRYPTION_KEY"
     "CSFX_ENV_ENCRYPTION_KEY"
     "CSFX_SITE_SECRET"
+    "CSFX_INTERNAL_TOKEN"
   ];
 
   scopedEnvDir = "/run/csfx-env";
@@ -228,7 +229,7 @@ let
     RestrictSUIDSGID = true;
   };
 
-  mkService = { name, description, bin, binName, secrets, extraEnv ? { }, after ? [ ], requires ? [ ], wants ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, envFiles ? [ ], preStart ? [ ], extraServiceConfig ? { }, path ? [ ] }:
+  mkService = { name, description, bin, binName, secrets, extraEnv ? { }, after ? [ ], requires ? [ ], wants ? [ ], listenAddr ? "127.0.0.1", clusterCa ? true, stateDirectory ? null, envFiles ? [ ], preStart ? [ ], extraServiceConfig ? { }, path ? [ ] }:
     let scoped = scopedEnv name secrets; in {
       inherit description path;
       after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
@@ -246,9 +247,9 @@ let
       } // lib.optionalAttrs (stateDirectory != null) {
         StateDirectory = stateDirectory;
       } // extraServiceConfig // {
-        LoadCredential = [ clusterCaCredential ] ++ lib.toList (extraServiceConfig.LoadCredential or [ ]);
+        LoadCredential = lib.optional clusterCa clusterCaCredential ++ lib.toList (extraServiceConfig.LoadCredential or [ ]);
       };
-      environment = commonEnv // { CSFX_CA_CERT_PATH = "%d/ca.crt"; } // extraEnv // { LISTEN_ADDR = listenAddr; };
+      environment = commonEnv // lib.optionalAttrs clusterCa { CSFX_CA_CERT_PATH = "%d/ca.crt"; } // extraEnv // { LISTEN_ADDR = listenAddr; };
     };
 
   statusScript = pkgs.writeShellScriptBin "csfx-status" ''
@@ -615,7 +616,7 @@ in
           description = "CSFX API Gateway";
           bin = gatewayBin;
           binName = "api-gateway";
-          secrets = [ "DATABASE_URL" "JWT_SECRET" "CSFX_SECRET_KEY" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" ];
+          secrets = [ "DATABASE_URL" "JWT_SECRET" "CSFX_SECRET_KEY" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" "CSFX_INTERNAL_TOKEN" ];
           listenAddr = "0.0.0.0";
           stateDirectory = "csfx-cp";
           path = [ pkgs.postgresql_16 ];
@@ -669,7 +670,8 @@ in
           description = "CSFX Registry";
           bin = registryBin;
           binName = "registry";
-          secrets = [ "DATABASE_URL" ];
+          clusterCa = false;
+          secrets = [ "DATABASE_URL" "CSFX_INTERNAL_TOKEN" ];
           stateDirectory = "csfx-cp";
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
@@ -682,9 +684,8 @@ in
           description = "CSFX Scheduler";
           bin = schedulerBin;
           binName = "scheduler";
-          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" ];
+          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_INTERNAL_TOKEN" ];
           extraEnv = {
-            API_GATEWAY_URL = "https://localhost:8000";
             SCHEDULER_STRATEGY = cfg.schedulerStrategy;
           };
         };
@@ -694,7 +695,7 @@ in
           description = "CSFX Volume Manager";
           bin = volumeManagerBin;
           binName = "volume-manager";
-          secrets = [ "DATABASE_URL" ];
+          secrets = [ "DATABASE_URL" "CSFX_INTERNAL_TOKEN" ];
           path = lib.optionals cephEnabled [ pkgs.ceph-client ];
           extraEnv = cephEnv;
           extraServiceConfig = cephServiceConfig;
@@ -705,7 +706,7 @@ in
           description = "CSFX Failover Controller";
           bin = failoverBin;
           binName = "failover-controller";
-          secrets = [ "DATABASE_URL" ];
+          secrets = [ "DATABASE_URL" "CSFX_INTERNAL_TOKEN" ];
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             VOLUME_MANAGER_URL = "http://localhost:8003";
@@ -717,7 +718,7 @@ in
           description = "CSFX SDN Controller";
           bin = sdnBin;
           binName = "sdn-controller";
-          secrets = [ "DATABASE_URL" ];
+          secrets = [ "DATABASE_URL" "CSFX_INTERNAL_TOKEN" ];
         };
 
         csfx-object-storage = lib.mkIf hasObjectStorage (mkService {
@@ -725,7 +726,7 @@ in
           description = "CSFX Object Storage";
           bin = objectStorageBin;
           binName = "object-storage";
-          secrets = [ "DATABASE_URL" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" ];
+          secrets = [ "DATABASE_URL" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_INTERNAL_TOKEN" ];
           after = [ "garage.service" ];
           requires = [ "garage.service" ];
           extraEnv = {
@@ -759,7 +760,7 @@ in
           description = "CSFX Site Builder";
           bin = siteBuilderBin;
           binName = "site-builder";
-          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" ];
+          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" "CSFX_INTERNAL_TOKEN" ];
           after = [ "csfx-site-env.service" "csfx-scheduler.service" ];
           requires = [ "csfx-site-env.service" ];
           path = [ pkgs.git ];

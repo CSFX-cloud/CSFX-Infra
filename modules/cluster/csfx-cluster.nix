@@ -11,14 +11,25 @@ let
   joinEnvFile = "/etc/csfx/etcd-join.env";
   etcdEndpoint = "http://127.0.0.1:2379";
   patroniMemberPrefix = "/service/csfx/members/";
-  etcdPort = 2379;
   etcdPeerPort = 2380;
   postgresPort = 5433;
   pgbouncerDir = "/run/csfx-pgbouncer";
   pgbouncerPort = 6432;
   pgbouncerUser = "csfx-pgbouncer";
   patroniApiPort = 8008;
+  superuserPasswordFile = "/etc/csfx/patroni-superuser-password";
+  restapiPasswordFile = "${runDir}/patroni-restapi-password";
   meshCidr = "10.100.0.0/16";
+  etcdPeerCaCert = "/etc/csfx/etcd-peer-ca.crt";
+  etcdPeerCaKey = "/etc/csfx/etcd-peer-ca.key";
+  etcdPeerCert = "/etc/csfx/etcd-peer.crt";
+  etcdPeerKey = "/etc/csfx/etcd-peer.key";
+  issueEtcdPeerCertificate = import ./issue-certificate.nix {
+    inherit pkgs;
+    caCert = etcdPeerCaCert;
+    caKey = etcdPeerCaKey;
+    renewBeforeSeconds = 2592000;
+  };
   clusterEnvFile = "/etc/csfx/cluster.env";
   promoteMarker = "/etc/csfx/master-join-promote";
   keepalivedDir = "/run/csfx-keepalived";
@@ -105,11 +116,9 @@ let
     if [ -n "$ip" ]; then
       bind="0.0.0.0"
       advertise="$ip"
-      client_urls="http://127.0.0.1:${toString etcdPort},http://$ip:${toString etcdPort}"
     else
       bind="127.0.0.1"
       advertise="127.0.0.1"
-      client_urls="http://127.0.0.1:${toString etcdPort}"
     fi
 
     member_name=$(${nodeName})
@@ -120,24 +129,63 @@ let
       fi
     fi
 
+    ${pkgs.coreutils}/bin/mkdir -p /etc/csfx
+    for placeholder in ${etcdPeerCaCert} ${etcdPeerCaKey}; do
+      [ -e "$placeholder" ] || ${pkgs.coreutils}/bin/install -m 0600 /dev/null "$placeholder"
+    done
+
+    peer_scheme=http
+    if [ -f ${joinEnvFile} ]; then
+      if ${pkgs.gnugrep}/bin/grep -q '^ETCD_INITIAL_CLUSTER=.*https://' ${joinEnvFile}; then
+        peer_scheme=https
+      fi
+    elif [ -s ${etcdPeerCaCert} ] && [ -s ${etcdPeerCaKey} ]; then
+      peer_scheme=https
+    fi
+    if [ "$peer_scheme" = "https" ]; then
+      ${issueEtcdPeerCertificate}
+      peer_sans="IP:127.0.0.1"
+      if [ "$advertise" != "127.0.0.1" ]; then
+        peer_sans="$peer_sans,IP:$advertise"
+      fi
+      issue etcd-peer "$member_name" "$peer_sans" ${etcdPeerCert} ${etcdPeerKey}
+      ${pkgs.coreutils}/bin/chown etcd:etcd ${etcdPeerCert} ${etcdPeerKey}
+    fi
+
     staging=$(${pkgs.coreutils}/bin/mktemp -d)
     trap '${pkgs.coreutils}/bin/rm -rf "$staging"' EXIT
 
     cat > "$staging/etcd.env" <<EOF
     ETCD_NAME=$member_name
-    ETCD_LISTEN_CLIENT_URLS=$client_urls
-    ETCD_ADVERTISE_CLIENT_URLS=http://$advertise:${toString etcdPort}
-    ETCD_LISTEN_PEER_URLS=http://$advertise:${toString etcdPeerPort}
-    ETCD_INITIAL_ADVERTISE_PEER_URLS=http://$advertise:${toString etcdPeerPort}
+    ETCD_LISTEN_CLIENT_URLS=${etcdEndpoint}
+    ETCD_ADVERTISE_CLIENT_URLS=${etcdEndpoint}
+    ETCD_LISTEN_PEER_URLS=$peer_scheme://$advertise:${toString etcdPeerPort}
+    ETCD_INITIAL_ADVERTISE_PEER_URLS=$peer_scheme://$advertise:${toString etcdPeerPort}
     EOF
+    if [ "$peer_scheme" = "https" ]; then
+      cat >> "$staging/etcd.env" <<EOF
+    ETCD_PEER_CERT_FILE=${etcdPeerCert}
+    ETCD_PEER_KEY_FILE=${etcdPeerKey}
+    ETCD_PEER_TRUSTED_CA_FILE=${etcdPeerCaCert}
+    ETCD_PEER_CLIENT_CERT_AUTH=true
+    EOF
+    fi
     if [ ! -f ${joinEnvFile} ]; then
-      printf 'ETCD_INITIAL_CLUSTER=%s=http://%s:%s\n' "$member_name" "$advertise" "${toString etcdPeerPort}" >> "$staging/etcd.env"
+      printf 'ETCD_INITIAL_CLUSTER=%s=%s://%s:%s\n' "$member_name" "$peer_scheme" "$advertise" "${toString etcdPeerPort}" >> "$staging/etcd.env"
     fi
     printf '%s' "$member_name" > "$staging/patroni-name"
     printf '%s' "$bind:${toString patroniApiPort}" > "$staging/patroni-restapi-listen"
     printf '%s' "$advertise:${toString patroniApiPort}" > "$staging/patroni-restapi-address"
     printf '%s' "$bind:${toString postgresPort}" > "$staging/patroni-postgresql-listen"
     printf '%s' "$advertise:${toString postgresPort}" > "$staging/patroni-postgresql-address"
+
+    restapi_password_source=${superuserPasswordFile}
+    if [ -f "$restapi_password_source" ]; then
+      restapi_password=$(printf 'patroni-restapi:%s' "$(${pkgs.coreutils}/bin/cat "$restapi_password_source")" | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d' ' -f1)
+      (umask 0177; printf '%s' "$restapi_password" > ${restapiPasswordFile})
+      ${pkgs.coreutils}/bin/chgrp patroni ${restapiPasswordFile}
+      ${pkgs.coreutils}/bin/chmod 0640 ${restapiPasswordFile}
+    fi
 
     changed=0
     for file in "$staging"/*; do
@@ -158,7 +206,7 @@ let
     if [ -n "$ip" ]; then
       member=$($ETCDCTL member list 2>/dev/null | ${pkgs.gawk}/bin/awk -F', ' -v name="$member_name" '$3 == name { print $1 }' || true)
       if [ -n "$member" ]; then
-        $ETCDCTL member update "$member" --peer-urls="http://$ip:${toString etcdPeerPort}" \
+        $ETCDCTL member update "$member" --peer-urls="$peer_scheme://$ip:${toString etcdPeerPort}" \
           || echo "[WARN] etcd member update failed member=$member"
       fi
     fi
@@ -253,6 +301,16 @@ let
     fi
   '';
 
+  meshAclChain = "csfx-mesh-acl";
+  meshAclPorts = lib.concatMapStringsSep "," toString [ etcdPeerPort patroniApiPort postgresPort ];
+  meshMastersFile = "/etc/csfx/mesh-masters";
+
+  meshAclScript = import ./mesh-acl-script.nix {
+    inherit pkgs agentConfig joinEnvFile etcdEndpoint etcdPeerPort;
+    chain = meshAclChain;
+    mastersFile = meshMastersFile;
+  };
+
   clusterUnit = {
     unitConfig.ConditionPathExists = cp.controlPlaneConditions;
   };
@@ -322,9 +380,16 @@ in
     };
 
     networking.firewall = {
-      interfaces.wgmgmt0.allowedTCPPorts = [ etcdPort etcdPeerPort postgresPort patroniApiPort ];
       extraCommands = ''
         iptables -A nixos-fw -p vrrp -j nixos-fw-accept
+        iptables -N ${meshAclChain} 2>/dev/null || iptables -F ${meshAclChain}
+        iptables -A ${meshAclChain} -j ACCEPT
+        iptables -A nixos-fw -i wgmgmt0 -p tcp -m multiport --dports ${meshAclPorts} -j ${meshAclChain}
+        ${meshAclScript} || true
+      '';
+      extraStopCommands = ''
+        iptables -F ${meshAclChain} 2>/dev/null || true
+        iptables -X ${meshAclChain} 2>/dev/null || true
       '';
     };
 
@@ -335,9 +400,11 @@ in
           PATRONI_NAME = "${runDir}/patroni-name";
           PATRONI_RESTAPI_LISTEN = "${runDir}/patroni-restapi-listen";
           PATRONI_RESTAPI_CONNECT_ADDRESS = "${runDir}/patroni-restapi-address";
+          PATRONI_RESTAPI_PASSWORD = restapiPasswordFile;
           PATRONI_POSTGRESQL_LISTEN = "${runDir}/patroni-postgresql-listen";
           PATRONI_POSTGRESQL_CONNECT_ADDRESS = "${runDir}/patroni-postgresql-address";
         };
+        settings.restapi.authentication.username = "csfx";
         settings.postgresql.pg_hba = [
           "local all all trust"
           "host replication replicator 127.0.0.1/32 md5"
@@ -408,22 +475,36 @@ in
           environment = lib.mkIf (cfg.vip.address != null) (vipEnvironment // {
             TLS_SANS = "localhost,127.0.0.1,${cfg.vip.address}";
           });
+          after = [ "csfx-cluster-env.service" ];
           serviceConfig.EnvironmentFile = lib.mkAfter [ "-${clusterEnvFile}" ];
           serviceConfig.LoadCredential = [
             "garage-env:/etc/csfx/garage.env"
             "patroni-superuser-password:/etc/csfx/patroni-superuser-password"
             "patroni-replication-password:/etc/csfx/patroni-replication-password"
+            "etcd-peer-ca.crt:${etcdPeerCaCert}"
+            "etcd-peer-ca.key:${etcdPeerCaKey}"
           ];
         };
 
         csfx-cluster-env = clusterUnit // {
           description = "CSFX cluster network environment";
           before = [ "etcd.service" "patroni.service" ];
+          after = [ "csfx-setup.service" ];
           serviceConfig = {
             Type = "oneshot";
             RuntimeDirectory = "csfx-cluster";
             RuntimeDirectoryPreserve = "yes";
             ExecStart = "${clusterEnvScript} write";
+          };
+        };
+
+        csfx-mesh-acl = clusterUnit // {
+          description = "CSFX mesh access list for cluster ports";
+          wantedBy = [ "firewall.service" ];
+          after = [ "firewall.service" ];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${meshAclScript}";
           };
         };
 
@@ -527,6 +608,14 @@ in
           timerConfig = {
             OnBootSec = "30s";
             OnUnitActiveSec = "15s";
+          };
+        };
+
+        csfx-mesh-acl = {
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnBootSec = "20s";
+            OnUnitActiveSec = "30s";
           };
         };
 
