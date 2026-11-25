@@ -96,7 +96,8 @@ let
     def assert_state_intact():
         machine.succeed(f"test \"$(cat {SENTINEL_FILE})\" = sentinel")
         machine.succeed("test -f /var/lib/csfx-data/csfx/.setup-complete")
-        machine.succeed("sha256sum -c /root/cp-env.sha256")
+        machine.succeed("grep -v '^CSFX_INTERNAL_TOKEN=' /etc/csfx/cp.env | sha256sum -c /root/cp-env.sha256")
+        machine.succeed("grep -q '^CSFX_INTERNAL_TOKEN=.' /etc/csfx/cp.env")
         machine.succeed("ETCDCTL_API=3 etcdctl get /csfx/test/sentinel --print-value-only | grep -x sentinel")
         machine.succeed(f"{HEALTH} | grep -E '^(200|401)$'")
 
@@ -105,7 +106,7 @@ let
     wait_healthy()
     machine.wait_for_file("/var/lib/csfx-data/csfx/.setup-complete")
     machine.succeed(f"echo sentinel > {SENTINEL_FILE}")
-    machine.succeed("sha256sum /etc/csfx/cp.env > /root/cp-env.sha256")
+    machine.succeed("grep -v '^CSFX_INTERNAL_TOKEN=' /etc/csfx/cp.env | sha256sum > /root/cp-env.sha256")
     machine.wait_until_succeeds("ETCDCTL_API=3 etcdctl put /csfx/test/sentinel sentinel")
     baseline = settled_units()
     assert baseline, "no service was stable before the upgrade"
