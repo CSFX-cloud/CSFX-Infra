@@ -229,7 +229,7 @@ let
     RestrictSUIDSGID = true;
   };
 
-  mkService = { name, description, bin, binName, secrets, extraEnv ? { }, after ? [ ], requires ? [ ], wants ? [ ], listenAddr ? "127.0.0.1", stateDirectory ? null, envFiles ? [ ], preStart ? [ ], extraServiceConfig ? { }, path ? [ ] }:
+  mkService = { name, description, bin, binName, secrets, extraEnv ? { }, after ? [ ], requires ? [ ], wants ? [ ], listenAddr ? "127.0.0.1", clusterCa ? true, stateDirectory ? null, envFiles ? [ ], preStart ? [ ], extraServiceConfig ? { }, path ? [ ] }:
     let scoped = scopedEnv name secrets; in {
       inherit description path;
       after = [ "network.target" "etcd.service" "csfx-migrate.service" ] ++ after;
@@ -247,9 +247,9 @@ let
       } // lib.optionalAttrs (stateDirectory != null) {
         StateDirectory = stateDirectory;
       } // extraServiceConfig // {
-        LoadCredential = [ clusterCaCredential ] ++ lib.toList (extraServiceConfig.LoadCredential or [ ]);
+        LoadCredential = lib.optional clusterCa clusterCaCredential ++ lib.toList (extraServiceConfig.LoadCredential or [ ]);
       };
-      environment = commonEnv // { CSFX_CA_CERT_PATH = "%d/ca.crt"; } // extraEnv // { LISTEN_ADDR = listenAddr; };
+      environment = commonEnv // lib.optionalAttrs clusterCa { CSFX_CA_CERT_PATH = "%d/ca.crt"; } // extraEnv // { LISTEN_ADDR = listenAddr; };
     };
 
   statusScript = pkgs.writeShellScriptBin "csfx-status" ''
@@ -670,6 +670,7 @@ in
           description = "CSFX Registry";
           bin = registryBin;
           binName = "registry";
+          clusterCa = false;
           secrets = [ "DATABASE_URL" "CSFX_INTERNAL_TOKEN" ];
           stateDirectory = "csfx-cp";
           extraEnv = {
