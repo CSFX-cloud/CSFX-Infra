@@ -52,6 +52,11 @@ let
           echo "[INFO] site secret added file=$ENV_FILE"
         fi
 
+        if [ -f "$ENV_FILE" ] && [ ! -f "$JOIN_ENV_FILE" ] && ! ${pkgs.gnugrep}/bin/grep -q '^CSFX_INTERNAL_TOKEN=' "$ENV_FILE"; then
+          printf 'CSFX_INTERNAL_TOKEN=%s\n' "$(${pkgs.openssl}/bin/openssl rand -hex 32)" >> "$ENV_FILE"
+          echo "[INFO] internal token added file=$ENV_FILE"
+        fi
+
         if [ -f "$DONE_FILE" ]; then
           exit 0
         fi
@@ -67,6 +72,7 @@ let
         GARAGE_RPC_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         OBJECT_STORAGE_ENCRYPTION_KEY=$(${pkgs.openssl}/bin/openssl rand -hex 32)
         SITE_SECRET=$(${pkgs.openssl}/bin/openssl rand -hex 32)
+        INTERNAL_TOKEN=$(${pkgs.openssl}/bin/openssl rand -hex 32)
 
         cat > "$ENV_FILE" <<EOF
     DATABASE_URL=postgres://csfx:$DB_PASSWORD@127.0.0.1:6432/csfx
@@ -76,6 +82,7 @@ let
     GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN_TOKEN
     OBJECT_STORAGE_ENCRYPTION_KEY=$OBJECT_STORAGE_ENCRYPTION_KEY
     CSFX_SITE_SECRET=$SITE_SECRET
+    CSFX_INTERNAL_TOKEN=$INTERNAL_TOKEN
     EOF
         chmod 0600 "$ENV_FILE"
 
