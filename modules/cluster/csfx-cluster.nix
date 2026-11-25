@@ -260,6 +260,55 @@ let
     fi
   '';
 
+  meshAclChain = "csfx-mesh-acl";
+  meshAclPorts = lib.concatMapStringsSep "," toString [ etcdPeerPort patroniApiPort postgresPort ];
+  meshMastersFile = "/etc/csfx/mesh-masters";
+
+  meshAclScript = pkgs.writeShellScript "csfx-mesh-acl" ''
+    set -euo pipefail
+
+    IPTABLES=${pkgs.iptables}/bin/iptables
+    ip_pattern='[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
+
+    $IPTABLES -n -L ${meshAclChain} > /dev/null 2>&1 || exit 0
+
+    own=""
+    if [ -f ${agentConfig} ]; then
+      own=$(${pkgs.jq}/bin/jq -r '.wg_tunnel_ip // empty' ${agentConfig})
+    fi
+
+    from_join=""
+    if [ -f ${joinEnvFile} ]; then
+      from_join=$(${pkgs.gnugrep}/bin/grep '^ETCD_INITIAL_CLUSTER=' ${joinEnvFile} | ${pkgs.gnugrep}/bin/grep -oE "$ip_pattern" || true)
+    fi
+
+    from_etcd=$(${pkgs.etcd}/bin/etcdctl --endpoints=${etcdEndpoint} member list 2>/dev/null | ${pkgs.gnugrep}/bin/grep -oE "http://$ip_pattern:${toString etcdPeerPort}" | ${pkgs.gnugrep}/bin/grep -oE "$ip_pattern" || true)
+    if [ -n "$from_etcd" ]; then
+      printf '%s\n' "$from_etcd" | ${pkgs.coreutils}/bin/sort -u > ${meshMastersFile}
+    fi
+    cached=$(${pkgs.coreutils}/bin/cat ${meshMastersFile} 2>/dev/null || true)
+
+    masters=$(printf '%s\n' "$own" "$from_join" "$from_etcd" "$cached" | ${pkgs.gnugrep}/bin/grep -E "^$ip_pattern$" | ${pkgs.coreutils}/bin/sort -u || true)
+
+    staging=$(${pkgs.coreutils}/bin/mktemp)
+    trap '${pkgs.coreutils}/bin/rm -f "$staging"' EXIT
+    {
+      echo "*filter"
+      echo ":${meshAclChain} - [0:0]"
+      if [ -z "$masters" ]; then
+        echo "-A ${meshAclChain} -j ACCEPT"
+      else
+        for master in $masters; do
+          echo "-A ${meshAclChain} -s $master/32 -j ACCEPT"
+        done
+        echo "-A ${meshAclChain} -j DROP"
+      fi
+      echo "COMMIT"
+    } > "$staging"
+    ${pkgs.iptables}/bin/iptables-restore --noflush < "$staging"
+    echo "[INFO] mesh acl applied masters=$(echo $masters | ${pkgs.coreutils}/bin/tr ' ' ',')"
+  '';
+
   clusterUnit = {
     unitConfig.ConditionPathExists = cp.controlPlaneConditions;
   };
@@ -329,9 +378,15 @@ in
     };
 
     networking.firewall = {
-      interfaces.wgmgmt0.allowedTCPPorts = [ etcdPeerPort postgresPort patroniApiPort ];
       extraCommands = ''
         iptables -A nixos-fw -p vrrp -j nixos-fw-accept
+        iptables -N ${meshAclChain} 2>/dev/null || iptables -F ${meshAclChain}
+        iptables -A ${meshAclChain} -j ACCEPT
+        iptables -A nixos-fw -i wgmgmt0 -p tcp -m multiport --dports ${meshAclPorts} -j ${meshAclChain}
+      '';
+      extraStopCommands = ''
+        iptables -F ${meshAclChain} 2>/dev/null || true
+        iptables -X ${meshAclChain} 2>/dev/null || true
       '';
     };
 
@@ -436,6 +491,16 @@ in
           };
         };
 
+        csfx-mesh-acl = clusterUnit // {
+          description = "CSFX mesh access list for cluster ports";
+          wantedBy = [ "firewall.service" ];
+          after = [ "firewall.service" "etcd.service" ];
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${meshAclScript}";
+          };
+        };
+
         csfx-cluster-net = clusterUnit // {
           description = "CSFX cluster network reconciliation";
           after = [ "csfx-cluster-env.service" ];
@@ -536,6 +601,14 @@ in
           timerConfig = {
             OnBootSec = "30s";
             OnUnitActiveSec = "15s";
+          };
+        };
+
+        csfx-mesh-acl = {
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnBootSec = "20s";
+            OnUnitActiveSec = "30s";
           };
         };
 

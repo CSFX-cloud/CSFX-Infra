@@ -694,7 +694,7 @@ in
           description = "CSFX Volume Manager";
           bin = volumeManagerBin;
           binName = "volume-manager";
-          secrets = [ "DATABASE_URL" ];
+          secrets = [ "DATABASE_URL" "CSFX_INTERNAL_TOKEN" ];
           path = lib.optionals cephEnabled [ pkgs.ceph-client ];
           extraEnv = cephEnv;
           extraServiceConfig = cephServiceConfig;
@@ -705,7 +705,7 @@ in
           description = "CSFX Failover Controller";
           bin = failoverBin;
           binName = "failover-controller";
-          secrets = [ "DATABASE_URL" ];
+          secrets = [ "DATABASE_URL" "CSFX_INTERNAL_TOKEN" ];
           extraEnv = {
             SCHEDULER_SERVICE_URL = "http://localhost:8002";
             VOLUME_MANAGER_URL = "http://localhost:8003";
@@ -717,7 +717,7 @@ in
           description = "CSFX SDN Controller";
           bin = sdnBin;
           binName = "sdn-controller";
-          secrets = [ "DATABASE_URL" ];
+          secrets = [ "DATABASE_URL" "CSFX_INTERNAL_TOKEN" ];
         };
 
         csfx-object-storage = lib.mkIf hasObjectStorage (mkService {
@@ -725,7 +725,7 @@ in
           description = "CSFX Object Storage";
           bin = objectStorageBin;
           binName = "object-storage";
-          secrets = [ "DATABASE_URL" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" ];
+          secrets = [ "DATABASE_URL" "GARAGE_ADMIN_TOKEN" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_INTERNAL_TOKEN" ];
           after = [ "garage.service" ];
           requires = [ "garage.service" ];
           extraEnv = {
@@ -759,7 +759,7 @@ in
           description = "CSFX Site Builder";
           bin = siteBuilderBin;
           binName = "site-builder";
-          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" ];
+          secrets = [ "DATABASE_URL" "OBJECT_STORAGE_ENCRYPTION_KEY" "CSFX_ENV_ENCRYPTION_KEY" "CSFX_SITE_SECRET" "CSFX_INTERNAL_TOKEN" ];
           after = [ "csfx-site-env.service" "csfx-scheduler.service" ];
           requires = [ "csfx-site-env.service" ];
           path = [ pkgs.git ];
