@@ -20,6 +20,16 @@ let
   superuserPasswordFile = "/etc/csfx/patroni-superuser-password";
   restapiPasswordFile = "${runDir}/patroni-restapi-password";
   meshCidr = "10.100.0.0/16";
+  etcdPeerCaCert = "/etc/csfx/etcd-peer-ca.crt";
+  etcdPeerCaKey = "/etc/csfx/etcd-peer-ca.key";
+  etcdPeerCert = "/etc/csfx/etcd-peer.crt";
+  etcdPeerKey = "/etc/csfx/etcd-peer.key";
+  issueEtcdPeerCertificate = import ./issue-certificate.nix {
+    inherit pkgs;
+    caCert = etcdPeerCaCert;
+    caKey = etcdPeerCaKey;
+    renewBeforeSeconds = 2592000;
+  };
   clusterEnvFile = "/etc/csfx/cluster.env";
   promoteMarker = "/etc/csfx/master-join-promote";
   keepalivedDir = "/run/csfx-keepalived";
@@ -119,6 +129,23 @@ let
       fi
     fi
 
+    ${pkgs.coreutils}/bin/mkdir -p /etc/csfx
+    for placeholder in ${etcdPeerCaCert} ${etcdPeerCaKey}; do
+      [ -e "$placeholder" ] || ${pkgs.coreutils}/bin/install -m 0600 /dev/null "$placeholder"
+    done
+
+    peer_scheme=http
+    if [ -s ${etcdPeerCaCert} ] && [ -s ${etcdPeerCaKey} ]; then
+      peer_scheme=https
+      ${issueEtcdPeerCertificate}
+      peer_sans="IP:127.0.0.1"
+      if [ "$advertise" != "127.0.0.1" ]; then
+        peer_sans="$peer_sans,IP:$advertise"
+      fi
+      issue etcd-peer "$member_name" "$peer_sans" ${etcdPeerCert} ${etcdPeerKey}
+      ${pkgs.coreutils}/bin/chown etcd:etcd ${etcdPeerCert} ${etcdPeerKey}
+    fi
+
     staging=$(${pkgs.coreutils}/bin/mktemp -d)
     trap '${pkgs.coreutils}/bin/rm -rf "$staging"' EXIT
 
@@ -126,11 +153,19 @@ let
     ETCD_NAME=$member_name
     ETCD_LISTEN_CLIENT_URLS=${etcdEndpoint}
     ETCD_ADVERTISE_CLIENT_URLS=${etcdEndpoint}
-    ETCD_LISTEN_PEER_URLS=http://$advertise:${toString etcdPeerPort}
-    ETCD_INITIAL_ADVERTISE_PEER_URLS=http://$advertise:${toString etcdPeerPort}
+    ETCD_LISTEN_PEER_URLS=$peer_scheme://$advertise:${toString etcdPeerPort}
+    ETCD_INITIAL_ADVERTISE_PEER_URLS=$peer_scheme://$advertise:${toString etcdPeerPort}
     EOF
+    if [ "$peer_scheme" = "https" ]; then
+      cat >> "$staging/etcd.env" <<EOF
+    ETCD_PEER_CERT_FILE=${etcdPeerCert}
+    ETCD_PEER_KEY_FILE=${etcdPeerKey}
+    ETCD_PEER_TRUSTED_CA_FILE=${etcdPeerCaCert}
+    ETCD_PEER_CLIENT_CERT_AUTH=true
+    EOF
+    fi
     if [ ! -f ${joinEnvFile} ]; then
-      printf 'ETCD_INITIAL_CLUSTER=%s=http://%s:%s\n' "$member_name" "$advertise" "${toString etcdPeerPort}" >> "$staging/etcd.env"
+      printf 'ETCD_INITIAL_CLUSTER=%s=%s://%s:%s\n' "$member_name" "$peer_scheme" "$advertise" "${toString etcdPeerPort}" >> "$staging/etcd.env"
     fi
     printf '%s' "$member_name" > "$staging/patroni-name"
     printf '%s' "$bind:${toString patroniApiPort}" > "$staging/patroni-restapi-listen"
@@ -165,7 +200,7 @@ let
     if [ -n "$ip" ]; then
       member=$($ETCDCTL member list 2>/dev/null | ${pkgs.gawk}/bin/awk -F', ' -v name="$member_name" '$3 == name { print $1 }' || true)
       if [ -n "$member" ]; then
-        $ETCDCTL member update "$member" --peer-urls="http://$ip:${toString etcdPeerPort}" \
+        $ETCDCTL member update "$member" --peer-urls="$peer_scheme://$ip:${toString etcdPeerPort}" \
           || echo "[WARN] etcd member update failed member=$member"
       fi
     fi
@@ -282,7 +317,7 @@ let
       from_join=$(${pkgs.gnugrep}/bin/grep '^ETCD_INITIAL_CLUSTER=' ${joinEnvFile} | ${pkgs.gnugrep}/bin/grep -oE "$ip_pattern" || true)
     fi
 
-    from_etcd=$(${pkgs.etcd}/bin/etcdctl --endpoints=${etcdEndpoint} member list 2>/dev/null | ${pkgs.gnugrep}/bin/grep -oE "http://$ip_pattern:${toString etcdPeerPort}" | ${pkgs.gnugrep}/bin/grep -oE "$ip_pattern" || true)
+    from_etcd=$(${pkgs.etcd}/bin/etcdctl --endpoints=${etcdEndpoint} member list 2>/dev/null | ${pkgs.gnugrep}/bin/grep -oE "https?://$ip_pattern:${toString etcdPeerPort}" | ${pkgs.gnugrep}/bin/grep -oE "$ip_pattern" || true)
     if [ -n "$from_etcd" ]; then
       printf '%s\n' "$from_etcd" | ${pkgs.coreutils}/bin/sort -u > ${meshMastersFile}
     fi
@@ -477,12 +512,15 @@ in
             "garage-env:/etc/csfx/garage.env"
             "patroni-superuser-password:/etc/csfx/patroni-superuser-password"
             "patroni-replication-password:/etc/csfx/patroni-replication-password"
+            "etcd-peer-ca.crt:${etcdPeerCaCert}"
+            "etcd-peer-ca.key:${etcdPeerCaKey}"
           ];
         };
 
         csfx-cluster-env = clusterUnit // {
           description = "CSFX cluster network environment";
           before = [ "etcd.service" "patroni.service" ];
+          after = [ "csfx-setup.service" ];
           serviceConfig = {
             Type = "oneshot";
             RuntimeDirectory = "csfx-cluster";
