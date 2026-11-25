@@ -11,13 +11,14 @@ let
   joinEnvFile = "/etc/csfx/etcd-join.env";
   etcdEndpoint = "http://127.0.0.1:2379";
   patroniMemberPrefix = "/service/csfx/members/";
-  etcdPort = 2379;
   etcdPeerPort = 2380;
   postgresPort = 5433;
   pgbouncerDir = "/run/csfx-pgbouncer";
   pgbouncerPort = 6432;
   pgbouncerUser = "csfx-pgbouncer";
   patroniApiPort = 8008;
+  superuserPasswordFile = "/etc/csfx/patroni-superuser-password";
+  restapiPasswordFile = "${runDir}/patroni-restapi-password";
   meshCidr = "10.100.0.0/16";
   clusterEnvFile = "/etc/csfx/cluster.env";
   promoteMarker = "/etc/csfx/master-join-promote";
@@ -105,11 +106,9 @@ let
     if [ -n "$ip" ]; then
       bind="0.0.0.0"
       advertise="$ip"
-      client_urls="http://127.0.0.1:${toString etcdPort},http://$ip:${toString etcdPort}"
     else
       bind="127.0.0.1"
       advertise="127.0.0.1"
-      client_urls="http://127.0.0.1:${toString etcdPort}"
     fi
 
     member_name=$(${nodeName})
@@ -125,8 +124,8 @@ let
 
     cat > "$staging/etcd.env" <<EOF
     ETCD_NAME=$member_name
-    ETCD_LISTEN_CLIENT_URLS=$client_urls
-    ETCD_ADVERTISE_CLIENT_URLS=http://$advertise:${toString etcdPort}
+    ETCD_LISTEN_CLIENT_URLS=${etcdEndpoint}
+    ETCD_ADVERTISE_CLIENT_URLS=${etcdEndpoint}
     ETCD_LISTEN_PEER_URLS=http://$advertise:${toString etcdPeerPort}
     ETCD_INITIAL_ADVERTISE_PEER_URLS=http://$advertise:${toString etcdPeerPort}
     EOF
@@ -138,6 +137,14 @@ let
     printf '%s' "$advertise:${toString patroniApiPort}" > "$staging/patroni-restapi-address"
     printf '%s' "$bind:${toString postgresPort}" > "$staging/patroni-postgresql-listen"
     printf '%s' "$advertise:${toString postgresPort}" > "$staging/patroni-postgresql-address"
+
+    restapi_password_source=${superuserPasswordFile}
+    if [ -f "$restapi_password_source" ]; then
+      restapi_password=$(printf 'patroni-restapi:%s' "$(${pkgs.coreutils}/bin/cat "$restapi_password_source")" | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d' ' -f1)
+      (umask 0177; printf '%s' "$restapi_password" > ${restapiPasswordFile})
+      ${pkgs.coreutils}/bin/chgrp patroni ${restapiPasswordFile}
+      ${pkgs.coreutils}/bin/chmod 0640 ${restapiPasswordFile}
+    fi
 
     changed=0
     for file in "$staging"/*; do
@@ -322,7 +329,7 @@ in
     };
 
     networking.firewall = {
-      interfaces.wgmgmt0.allowedTCPPorts = [ etcdPort etcdPeerPort postgresPort patroniApiPort ];
+      interfaces.wgmgmt0.allowedTCPPorts = [ etcdPeerPort postgresPort patroniApiPort ];
       extraCommands = ''
         iptables -A nixos-fw -p vrrp -j nixos-fw-accept
       '';
@@ -335,9 +342,11 @@ in
           PATRONI_NAME = "${runDir}/patroni-name";
           PATRONI_RESTAPI_LISTEN = "${runDir}/patroni-restapi-listen";
           PATRONI_RESTAPI_CONNECT_ADDRESS = "${runDir}/patroni-restapi-address";
+          PATRONI_RESTAPI_PASSWORD = restapiPasswordFile;
           PATRONI_POSTGRESQL_LISTEN = "${runDir}/patroni-postgresql-listen";
           PATRONI_POSTGRESQL_CONNECT_ADDRESS = "${runDir}/patroni-postgresql-address";
         };
+        settings.restapi.authentication.username = "csfx";
         settings.postgresql.pg_hba = [
           "local all all trust"
           "host replication replicator 127.0.0.1/32 md5"
