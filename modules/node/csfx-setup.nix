@@ -323,7 +323,7 @@ in
         };
       };
 
-      csfx-agent.serviceConfig.ExecStartPre = [ "+${localAgentJoinScript}" ];
+      csfx-agent.serviceConfig.ExecStartPre = [ "-+${localAgentJoinScript}" ];
 
       patroni = {
         after = [ "csfx-mount-data.service" ];
