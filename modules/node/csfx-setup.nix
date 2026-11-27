@@ -184,17 +184,25 @@ let
     bind_to_data csfx-site-registry /var/lib/private/csfx-site-registry root:root csfx-site-registry.service
   '';
 
-  agentJoinEnv = "/etc/csfx/agent-join.env";
   agentRegistration = "/var/lib/csfx-agent/config.json";
+  localAgentJoinEnv = "/run/csfx/local-agent-join.env";
+  localJoinSkipPaths = map (lib.removePrefix "!") config.services.csfx-cp.controlPlaneConditions
+    ++ [ agentRegistration "/etc/csfx/agent-join.env" ];
 
   localAgentJoinScript = pkgs.writeShellScript "csfx-local-agent-join" ''
     set -euo pipefail
+
+    for path in ${lib.escapeShellArgs localJoinSkipPaths}; do
+      if [ -e "$path" ]; then
+        exit 0
+      fi
+    done
 
     set -a
     . ${config.services.csfx-cp.envFile}
     set +a
 
-    output=$(${config.services.csfx-cp.gatewayPackage}/bin/api-gateway --local-join)
+    output=$(${pkgs.coreutils}/bin/timeout 60 ${cfg.gatewayBinary} --local-join)
     case "$output" in
       join_string=csfx-join.*) ;;
       *)
@@ -203,10 +211,11 @@ let
         ;;
     esac
 
+    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname ${localAgentJoinEnv})"
     umask 0077
-    printf 'CSFX_JOIN=%s\n' "''${output#join_string=}" > ${agentJoinEnv}.tmp
-    mv ${agentJoinEnv}.tmp ${agentJoinEnv}
-    echo "[INFO] founding node agent join prepared file=${agentJoinEnv}"
+    printf 'CSFX_JOIN=%s\n' "''${output#join_string=}" > ${localAgentJoinEnv}.tmp
+    ${pkgs.coreutils}/bin/mv ${localAgentJoinEnv}.tmp ${localAgentJoinEnv}
+    echo "[INFO] founding node agent join issued file=${localAgentJoinEnv}"
   '';
 
 in
@@ -218,6 +227,12 @@ in
       type = lib.types.str;
       default = "/dev/sda3";
       description = "Partition device for persistent data (PostgreSQL, etcd, config). Must not be the boot partition.";
+    };
+
+    gatewayBinary = lib.mkOption {
+      type = lib.types.str;
+      default = "${config.services.csfx-cp.gatewayPackage}/bin/api-gateway";
+      description = "API gateway binary that issues the founding node agent join ticket";
     };
 
     dataSize = lib.mkOption {
@@ -308,23 +323,7 @@ in
         };
       };
 
-      csfx-local-agent-join = {
-        description = "CSFX founding node agent join";
-        wantedBy = [ "multi-user.target" ];
-        after = [ "csfx-cp-ready.service" ];
-        requires = [ "csfx-cp-ready.service" ];
-        before = [ "csfx-agent.service" ];
-        unitConfig.ConditionPathExists = config.services.csfx-cp.controlPlaneConditions
-          ++ [ "!${agentJoinEnv}" "!${agentRegistration}" ];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          Restart = "on-failure";
-          RestartSec = "10s";
-          ExecStart = localAgentJoinScript;
-          User = "root";
-        };
-      };
+      csfx-agent.serviceConfig.ExecStartPre = [ "+${localAgentJoinScript}" ];
 
       patroni = {
         after = [ "csfx-mount-data.service" ];
