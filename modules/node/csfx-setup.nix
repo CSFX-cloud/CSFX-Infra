@@ -184,6 +184,40 @@ let
     bind_to_data csfx-site-registry /var/lib/private/csfx-site-registry root:root csfx-site-registry.service
   '';
 
+  agentRegistration = "/var/lib/csfx-agent/config.json";
+  localAgentJoinEnv = "/run/csfx/local-agent-join.env";
+  localJoinSkipPaths = map (lib.removePrefix "!") config.services.csfx-cp.controlPlaneConditions
+    ++ [ agentRegistration "/etc/csfx/agent-join.env" ];
+
+  localAgentJoinScript = pkgs.writeShellScript "csfx-local-agent-join" ''
+    set -euo pipefail
+
+    for path in ${lib.escapeShellArgs localJoinSkipPaths}; do
+      if [ -e "$path" ]; then
+        exit 0
+      fi
+    done
+
+    set -a
+    . ${config.services.csfx-cp.envFile}
+    set +a
+
+    output=$(${pkgs.coreutils}/bin/timeout 60 ${cfg.gatewayBinary} --local-join)
+    case "$output" in
+      join_string=csfx-join.*) ;;
+      *)
+        echo "[ERROR] local join string not issued"
+        exit 1
+        ;;
+    esac
+
+    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname ${localAgentJoinEnv})"
+    umask 0077
+    printf 'CSFX_JOIN=%s\n' "''${output#join_string=}" > ${localAgentJoinEnv}.tmp
+    ${pkgs.coreutils}/bin/mv ${localAgentJoinEnv}.tmp ${localAgentJoinEnv}
+    echo "[INFO] founding node agent join issued file=${localAgentJoinEnv}"
+  '';
+
 in
 {
   options.services.csfx-setup = {
@@ -193,6 +227,12 @@ in
       type = lib.types.str;
       default = "/dev/sda3";
       description = "Partition device for persistent data (PostgreSQL, etcd, config). Must not be the boot partition.";
+    };
+
+    gatewayBinary = lib.mkOption {
+      type = lib.types.str;
+      default = "${config.services.csfx-cp.gatewayPackage}/bin/api-gateway";
+      description = "API gateway binary that issues the founding node agent join ticket";
     };
 
     dataSize = lib.mkOption {
@@ -282,6 +322,8 @@ in
           User = "root";
         };
       };
+
+      csfx-agent.serviceConfig.ExecStartPre = [ "-+${localAgentJoinScript}" ];
 
       patroni = {
         after = [ "csfx-mount-data.service" ];
