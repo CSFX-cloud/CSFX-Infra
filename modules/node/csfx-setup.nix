@@ -184,6 +184,31 @@ let
     bind_to_data csfx-site-registry /var/lib/private/csfx-site-registry root:root csfx-site-registry.service
   '';
 
+  agentJoinEnv = "/etc/csfx/agent-join.env";
+  agentRegistration = "/var/lib/csfx-agent/config.json";
+
+  localAgentJoinScript = pkgs.writeShellScript "csfx-local-agent-join" ''
+    set -euo pipefail
+
+    set -a
+    . ${config.services.csfx-cp.envFile}
+    set +a
+
+    output=$(${config.services.csfx-cp.gatewayPackage}/bin/api-gateway --local-join)
+    case "$output" in
+      join_string=csfx-join.*) ;;
+      *)
+        echo "[ERROR] local join string not issued"
+        exit 1
+        ;;
+    esac
+
+    umask 0077
+    printf 'CSFX_JOIN=%s\n' "''${output#join_string=}" > ${agentJoinEnv}.tmp
+    mv ${agentJoinEnv}.tmp ${agentJoinEnv}
+    echo "[INFO] founding node agent join prepared file=${agentJoinEnv}"
+  '';
+
 in
 {
   options.services.csfx-setup = {
@@ -279,6 +304,24 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
           ExecStart = setupScript;
+          User = "root";
+        };
+      };
+
+      csfx-local-agent-join = {
+        description = "CSFX founding node agent join";
+        wantedBy = [ "multi-user.target" ];
+        after = [ "csfx-cp-ready.service" ];
+        requires = [ "csfx-cp-ready.service" ];
+        before = [ "csfx-agent.service" ];
+        unitConfig.ConditionPathExists = config.services.csfx-cp.controlPlaneConditions
+          ++ [ "!${agentJoinEnv}" "!${agentRegistration}" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          Restart = "on-failure";
+          RestartSec = "10s";
+          ExecStart = localAgentJoinScript;
           User = "root";
         };
       };
